@@ -38,6 +38,7 @@
 #define JMP(reg) printf("\tjmp %s\n", reg);
 #define JMPE(reg) printf("\tjmpe %s\n", reg);
 #define JMPC(reg) printf("\tjmpc %s\n", reg);
+#define JMPZ(reg) printf("\tjmpz %s\n", reg);
 
 #define LOADW(val_reg, addr_reg) printf("\tloadw %s,%s\n", val_reg, addr_reg);
 #define STOREW(val_reg, addr_reg) printf("\tstorew %s,%s\n", val_reg, addr_reg);
@@ -95,28 +96,47 @@
 #define AND() C("OP And"); POP(R2); POP(R1); printf("\tand %s,%s\n", R1, R2); PUSH(R1);
 #define OR() C("OP Or"); POP(R2); POP(R1); printf("\tor %s,%s\n", R1, R2); PUSH(R1);
 
-#define EQUAL() {                                                              \
-        C("Op Equal");                                                         \
-        int equal_counter = counter();                                         \
-        printf("\tconst %s,op__equal_true__%d\n", R3, equal_counter);          \
-        POP(R2); POP(R1); CMP(R1, R2);                                         \
-        JMPC(R3);                                                              \
-        CONSTINT(R1, 0);                                                       \
-        printf("\tconst %s,op__equal__end__%d\n", R3, equal_counter);          \
-        JMP(R3);                                                               \
-        printf(":op__equal_true__%d\n", equal_counter);                        \
-        CONSTINT(R1, 1);                                                       \
-        printf(":op__equal__end__%d\n", equal_counter);                        \
-        PUSH(R1);                                                              \
-    }
-
-
 #define NOT() C("OP Not");                                                     \
     POP(R1); PUSH(R2); CONSTINT(R2, 2)                                         \
     printf("\tnot %s\n\tadd %s,%s\n", R1, R1, R2);                             \
     POP(R2); PUSH(R1);
 
 
+#define BOOL_OP(operation)                                                     \
+        {                                                                      \
+            int op_counter = counter();                                        \
+            printf("\tconst %s,op__true__%d\n", R4, op_counter);               \
+            printf("\t" #operation " %s,%s\n", R1, R2);                        \
+            JMPC(R4);                                                          \
+            CONSTINT(R3, 0);                                                   \
+            printf("\tconst %s,op__end__%d\n", R4, op_counter);                \
+            JMP(R4);                                                           \
+            printf(":op__true__%d\n", op_counter);                             \
+            CONSTINT(R3, 1);                                                   \
+            printf(":op__end__%d\n", op_counter);                              \
+        }
+
+
+#define EQUAL() BOOL_OP(cmp);
+#define LESS() BOOL_OP(uless);
+
+#define LESS_EQ()                                                               \
+        {                                                                       \
+            int op_counter = counter();                                         \
+            LESS();                                                             \
+            printf("\tconst %s,op__equal__%d\n", R4, op_counter);               \
+            CMP(R3, R3);                                                        \
+            JMPZ(R4);                                                           \
+            printf("\tconst %s,op__end__%d\n", R4, op_counter);                 \
+            JMP(R4);                                                            \
+            printf(":op__equal__%d\n", op_counter);                             \
+            EQUAL();                                                            \
+            printf(":op__end__%d\n", op_counter);                               \
+        }
+
+#define EQUAL_OP() POP(R2); POP(R1); EQUAL(); PUSH(R3);
+#define LESS_OP(reg1, reg2) POP(reg2); POP(reg1); LESS(); PUSH(R3);
+#define LESS_EQ_OP(reg1, reg2) POP(reg2); POP(reg1); LESS_EQ(); PUSH(R3);
 
 extern int counter();
 

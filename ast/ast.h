@@ -19,6 +19,10 @@ typedef enum {
     OP_OR,
 
     OP_EQUAL,
+    OP_SGT,             // Strictly Greater Than
+    OP_EGT,             // Equal or Greater Than
+    OP_SLT,             // Strictly Less Than
+    OP_ELT              // Equal or Less Than
 } binary_operator_t;
 
 typedef struct ast_node ast_node;

@@ -58,18 +58,23 @@ int main(int argc, char *argv[]) {
     make_function(get_alg_name(alg1),
         make_sequence(
             make_if_statement(
-                make_binary_operator(make_symbol("n"), OP_EQUAL, make_int(0)),
-                make_return(make_int(10)),
+                make_binary_operator(make_symbol("n"), OP_ELT, make_int(4000)),
+                make_assignement("n", make_int(2900)),
                 NULL
             ),
-            make_return(
-                make_call("Algo1", params1, 1)
+            make_sequence(
+                make_if_statement(
+                    make_binary_operator(make_symbol("n"), OP_EGT, make_int(1000)),
+                    make_return(make_symbol("n")),
+                    NULL
+                ),
+                make_return(make_int(50))
             )
         )
     );
 
     // Arbre de l'algorithme Algo2
-    ast_node *params2[] = { make_int(3000) };
+    ast_node *params2[] = { make_int(4000) };
     ast_node *node2 = 
     make_function(get_alg_name(alg2),
         make_return(make_call("Algo1", params2, 1))

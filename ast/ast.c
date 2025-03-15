@@ -261,6 +261,15 @@ static void resolve_types_in_binary_operation(ast_node *binary_op, algorithm *cu
             }
             break;
         case OP_EQUAL: // ne supporte pas bool == bool pour le moment
+            if (check_binary_operation_type(binary_op, vars, TYPE_INT, TYPE_INT)
+                || check_binary_operation_type(binary_op, vars, TYPE_BOOL, TYPE_BOOL)) {
+                binary_op->binary_operator.result_type = TYPE_BOOL;
+            }
+            break;
+        case OP_SGT:
+        case OP_EGT:
+        case OP_SLT:
+        case OP_ELT:
             if (check_binary_operation_type(binary_op, vars, TYPE_INT, TYPE_INT)) {
                 binary_op->binary_operator.result_type = TYPE_BOOL;
             }
@@ -357,7 +366,11 @@ static void write_binary_operator_code(ast_node *op) {
         case OP_DIV: DIV(); break;
         case OP_AND: AND(); break;
         case OP_OR: OR(); break;
-        case OP_EQUAL: EQUAL(); break;
+        case OP_EQUAL: EQUAL_OP(); break;
+        case OP_SGT: LESS_OP(R2, R1); break; 
+        case OP_EGT: LESS_EQ_OP(R2, R1); break; 
+        case OP_SLT: LESS_OP(R1, R2); break; 
+        case OP_ELT: LESS_EQ_OP(R1, R2); break; 
         default:
             ERROR("Unsupported binary operator during code writing\n");
     }
