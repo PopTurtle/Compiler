@@ -39,6 +39,7 @@ extern ast_node *make_call(const char *function_name, ast_node **parameters, int
 
 extern ast_node *make_if_statement(ast_node *condition, ast_node *then_block, ast_node *else_block);
 extern ast_node *make_do_for_i(const char *var_name, ast_node *start_expr, ast_node *end_expr, ast_node *body);
+extern ast_node *make_do_while(ast_node *condition, ast_node *body);
 
 extern ast_node *make_function(const char *function_name, ast_node *body);
 extern ast_node *make_sequence(ast_node *first, ast_node *second);

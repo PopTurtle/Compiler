@@ -68,17 +68,12 @@ int main(int argc, char *argv[]) {
     ast_node *params2[] = { make_int(3), make_int(4) };
     ast_node *node2 = 
     make_function(get_alg_name(alg2),
-        make_if_statement(
-            make_binary_operator(make_bool(0), OP_OR, make_bool(1)),
-            make_if_statement(
-                make_binary_operator(make_bool(1), OP_AND, make_bool(0)),
-                make_return(make_int(1)),
-                make_sequence(
-                    make_return(make_int(2)),
-                    make_return(make_int(4))
-                )
+        make_sequence(
+            make_do_while(
+                make_bool(1),
+                NULL
             ),
-            make_int(2)
+            make_return(make_int(45))
         )
     );
 

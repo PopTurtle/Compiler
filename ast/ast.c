@@ -19,6 +19,7 @@ typedef enum {
     // Structures
     NODE_IF_STATEMENT,
     NODE_DO_FOR_I,
+    NODE_DO_WHILE,
 
     // Suite d'instructions
     NODE_FUNCTION,
@@ -37,6 +38,7 @@ struct ast_node {
         struct { char *function_name; ast_node **parameters_expr; int params_count; } call;
         struct { ast_node *condition; ast_node *then_block; ast_node *else_block; } if_statement;
         struct { const char *var_name; ast_node *start_expr; ast_node *end_expr; ast_node *body; } do_for_i;
+        struct { ast_node *condition; ast_node *body; } do_while;
         struct { char *function_name; ast_node *body; } function;
         struct { ast_node *first; ast_node *second; } sequence;
     };
@@ -150,7 +152,16 @@ static void resolve_types_in_alg([[ maybe_unused ]] const char *alg_name, algori
     resolve_types_in_ast(get_alg_tree(alg), alg, get_alg_variables(alg));
 }
 
+#define CHECK_TYPE(expr, expected, msg_prefix)                                 \
+    temp = get_expr_known_type(expr, vars);                                    \
+    if (temp != TYPE_UNKNOWN && temp != expected) {                            \
+    ERRORF(msg_prefix " should have type %s but is of type %s\n", value_type_to_string(expected), value_type_to_string(temp)); \
+    }                                                                          \
+    unstable_if_unknown(temp);
+
 static void resolve_types_in_ast(ast_node *ast, algorithm *current_alg, variables_map *vars) {
+    if (ast == NULL) return;
+
     value_type temp;
     switch (ast->type) {
         case NODE_ASSIGNEMENT:
@@ -176,11 +187,7 @@ static void resolve_types_in_ast(ast_node *ast, algorithm *current_alg, variable
             resolve_types_in_ast(ast->if_statement.condition, current_alg, vars);
             resolve_types_in_ast(ast->if_statement.then_block, current_alg, vars);
             resolve_types_in_ast(ast->if_statement.else_block, current_alg, vars);
-            temp = get_expr_known_type(ast->if_statement.condition, vars);
-            if (temp != TYPE_UNKNOWN && temp != TYPE_BOOL) {
-                ERRORF("Condition of 'if statement' should have type %s but is of type %s\n", value_type_to_string(TYPE_BOOL), value_type_to_string(temp));
-            }
-            unstable_if_unknown(temp);
+            CHECK_TYPE(ast->if_statement.condition, TYPE_BOOL, "Condition of 'if statement'");
             break;
         
         case NODE_DO_FOR_I:
@@ -188,16 +195,14 @@ static void resolve_types_in_ast(ast_node *ast, algorithm *current_alg, variable
             resolve_types_in_ast(ast->do_for_i.start_expr, current_alg, vars);
             resolve_types_in_ast(ast->do_for_i.end_expr, current_alg, vars);
             resolve_types_in_ast(ast->do_for_i.body, current_alg, vars);
-            temp = get_expr_known_type(ast->do_for_i.start_expr, vars);
-            if (temp != TYPE_UNKNOWN && temp != TYPE_INT) {
-                ERRORF("First born expression of 'Do for statement' should have type %s but is of type %s\n", value_type_to_string(TYPE_INT), value_type_to_string(temp));
-            }
-            unstable_if_unknown(temp);
-            temp = get_expr_known_type(ast->do_for_i.end_expr, vars);
-            if (temp != TYPE_UNKNOWN && temp != TYPE_INT) {
-                ERRORF("Second born expression of 'Do for statement' should have type %s but is of type %s\n", value_type_to_string(TYPE_INT), value_type_to_string(temp));
-            }
-            unstable_if_unknown(temp);
+            CHECK_TYPE(ast->do_for_i.start_expr, TYPE_INT, "First born expression of 'Do for statement'");
+            CHECK_TYPE(ast->do_for_i.end_expr, TYPE_INT, "Second born expression of 'Do for statement'");
+            break;
+
+        case NODE_DO_WHILE:
+            resolve_types_in_ast(ast->do_while.condition, current_alg, vars);
+            resolve_types_in_ast(ast->do_while.body, current_alg, vars);
+            CHECK_TYPE(ast->do_while.condition, TYPE_BOOL, "Condition of 'while statement'");
             break;
 
         case NODE_FUNCTION:
@@ -479,6 +484,35 @@ static void write_instructions(ast_node *ast) {
             TAGC("end_for_loop", do_for_i_count);
             C("Do for loop end");
             break;
+        
+        case NODE_DO_WHILE:
+            C("Do while loop start");
+            int do_while_count = counter();
+
+            // Début de la boucle
+            TAGC("start_while_loop", do_while_count);
+
+            // Evaluer la condition, jmp à la fin si !condition
+            TAGCN("end_while_loop", do_while_count, sbf);
+            CONSTSTR(R3, sbf);
+            write_expression_code(ast->do_while.condition);
+            POP(R1);
+            CONSTINT(R2, 0);
+            CMP(R1, R2);
+            JMPC(R3);
+            
+            // Corps de la boucle
+            write_instructions(ast->do_while.body);
+
+            // Jump au début de la boucle
+            TAGCN("start_while_loop", do_while_count, sbf);
+            CONSTSTR(R3, sbf);
+            JMP(R3);
+
+            // Sortie de la boucle
+            TAGC("end_while_loop", do_while_count)
+            C("Do while loop end");
+            break;
 
         default:
             ERROR("Unsupported operation, cannot write code\n");
@@ -566,6 +600,8 @@ static int check_all_path_returns(ast_node *ast) {
                 && check_all_path_returns(ast->if_statement.else_block);
         case NODE_DO_FOR_I:
             return check_all_path_returns(ast->do_for_i.body);
+        case NODE_DO_WHILE:
+            return check_all_path_returns(ast->do_while.body);
         default:
             return 0;
     }
@@ -636,6 +672,8 @@ static void optimize_expr(ast_node **expr) {
 }
 
 static void optimize_const_expr(ast_node *ast) {
+    if (ast == NULL) return;
+
     switch (ast->type) {
         case NODE_FUNCTION:
             optimize_const_expr(ast->function.body); break;
@@ -650,6 +688,13 @@ static void optimize_const_expr(ast_node *ast) {
             optimize_expr(&ast->if_statement.condition);
             optimize_const_expr(ast->if_statement.then_block);
             optimize_const_expr(ast->if_statement.else_block); break;
+        case NODE_DO_FOR_I:
+            optimize_expr(&ast->do_for_i.start_expr);
+            optimize_expr(&ast->do_for_i.end_expr);
+            optimize_const_expr(ast->do_for_i.body); break;
+        case NODE_DO_WHILE:
+            optimize_expr(&ast->do_while.condition);
+            optimize_const_expr(ast->do_while.body); break;
         default:
             break;
     }
@@ -714,6 +759,14 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
                     OC(); O_DEBUG("Do for statement reduction, no iterations");
                     *ast_ptr = NULL;
                 }
+            }
+            break;
+
+        case NODE_DO_WHILE:
+            if (IS_BOOL_CONST(ast->do_while.condition) && ast->do_while.condition->number_value == 0) {
+                // La boucle ne fera aucun tour
+                OC(); O_DEBUG("While statement reduction, no iterations");
+                *ast_ptr = NULL;
             }
             break;
 
@@ -838,6 +891,14 @@ ast_node *make_do_for_i(const char *var_name, ast_node *start_expr, ast_node *en
     return node;
 }
 
+ast_node *make_do_while(ast_node *condition, ast_node *body) {
+    ast_node *node = canode();
+    node->type = NODE_DO_WHILE;
+    node->do_while.condition = condition;
+    node->do_while.body = body;
+    return node;
+}
+
 ast_node *make_function(const char *function_name, ast_node *body) {
     ast_node *node = canode();
     node->type = NODE_FUNCTION;
@@ -922,6 +983,11 @@ static void print_ast_aux(const ast_node *ast, int depth) {
             print_ast_aux(ast->do_for_i.start_expr, D);
             print_ast_aux(ast->do_for_i.end_expr, D);
             print_ast_aux(ast->do_for_i.body, D);
+            break;
+        case NODE_DO_WHILE:
+            printf("%sDo while\n", prefix);
+            print_ast_aux(ast->do_while.condition, D);
+            print_ast_aux(ast->do_while.body, D);
             break;
         case NODE_FUNCTION:
             printf("%sFonction %s\n", prefix, ast->function.function_name);
