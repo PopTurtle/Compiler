@@ -10,13 +10,18 @@
 void print_help_and_exit();
 void analyze_arg(const char *argstr, int *debug, int *no_code);
 void print_alg(const char *alg_name, algorithm *alg);
+
 void optimize_alg(const char *alg_name, algorithm *alg);
+void check_code(const char *alg_name, algorithm *alg);
+
+void debug_print_part(algorithms_map *algs, int should_print_part_title, const char *part_title);
+
+static int g_debug = 0;
+static int g_no_code = 0;
 
 int main(int argc, char *argv[]) {
-    int debug = 0;
-    int no_code = 0;
     for (int i = 1; i < argc; ++i) {
-        analyze_arg(argv[i], &debug, &no_code);
+        analyze_arg(argv[i], &g_debug, &g_no_code);
     }
 
     // Parse
@@ -91,28 +96,17 @@ int main(int argc, char *argv[]) {
     associate_tree(alg2, node2);
     // -------------------------------------------------------------------------
 
-    if (debug) {
-        foreach_algorithm(algs_map, print_alg);
-        printf("\n------------------\n| Type resolving |\n------------------\n\n\n");
-    }
-
+    debug_print_part(algs_map, 1, "Type resolving");
     resolve_types(algs_map);
 
-    if (debug) {
-        foreach_algorithm(algs_map, print_alg);
-        printf("\n-------------------\n| Optimizing code |\n-------------------\n\n\n");
-    }
-
+    debug_print_part(algs_map, 1, "Optimizing code");
     foreach_algorithm(algs_map, optimize_alg);
 
-    if (debug) {
-        foreach_algorithm(algs_map, print_alg);
-        if (!no_code) {
-            printf("\n---------------\n| Output code |\n---------------\n\n\n");
-        }
-    }
+    debug_print_part(algs_map, 1, "Code checking");
+    foreach_algorithm(algs_map, check_code);
 
-    if (!no_code) {
+    debug_print_part(algs_map, !g_no_code, "Output code");
+    if (!g_no_code) {
         write_all_instructions(algs_map, make_call("Algo2", NULL, 0));
     }
 
@@ -122,7 +116,7 @@ int main(int argc, char *argv[]) {
 
 void print_help_and_exit() {
     printf("Usage: ./compile\n");
-    printf("\t-d: Show debug information on standard output\n");
+    printf("\t-d: Show g_debug information on standard output\n");
     printf("\t-h: Show help\n");
     printf("\tTo compile to a file, redirect: ./compile < input.algo > output.asipro\n");
     exit(0);
@@ -160,5 +154,33 @@ void print_alg([[ maybe_unused ]] const char *alg_name, algorithm *alg) {
 }
 
 void optimize_alg([[ maybe_unused ]] const char *alg_name, algorithm *alg) {
-    optimize_ast(get_alg_tree(alg));
+    optimize_ast(get_alg_tree(alg), g_debug);
+}
+
+void check_code([[ maybe_unused ]] const char *alg_name, algorithm *alg) {
+    check_ast_code(get_alg_tree(alg));
+}
+
+
+void debug_print_part(algorithms_map *algs, int should_print_part_title, const char *part_title) {
+    if (!g_debug) return;
+    foreach_algorithm(algs, print_alg);
+
+    if (should_print_part_title) {
+        size_t tlen = strlen(part_title) + 4 + 1;
+        char *line_buff = cralloc(tlen);
+        char *text_buff = cralloc(tlen);
+        
+        line_buff[tlen - 1] = '\0';
+        for (size_t i = 0; i < tlen - 1; ++i) {
+            line_buff[i] = '-';
+        }
+
+        sprintf(text_buff, "| %s |", part_title);
+
+        printf("\n%s\n%s\n%s\n\n\n", line_buff, text_buff, line_buff);
+        
+        free(line_buff);
+        free(text_buff);
+    }
 }

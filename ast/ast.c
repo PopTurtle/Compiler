@@ -25,8 +25,6 @@ typedef enum {
     NODE_SEQUENCE,
 } ast_node_type;
 
-#error TODO: Ajouter l'instruction DO_WHILE
-
 struct ast_node {
     ast_node_type type;
     union {
@@ -552,6 +550,14 @@ void write_all_instructions(algorithms_map *algs, ast_node *main_call) {
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
+int g_odebug = 0;
+int g_ochanged;
+
+#define O_DEBUGF(fmt, ...) if (g_odebug) { printf("-> " fmt "\n", __VA_ARGS__); }
+#define O_DEBUG(str) O_DEBUGF("%s", str);
+
+#define OC() (g_ochanged++)
+
 #define IS_INT_CONST(val) ((val)->type == NODE_CONST_INT)
 #define IS_BOOL_CONST(val) ((val)->type == NODE_CONST_BOOL)
 
@@ -559,8 +565,8 @@ void write_all_instructions(algorithms_map *algs, ast_node *main_call) {
 
 #define MKVAL(expr, op, make_new) make_new((expr)->binary_operator.left->number_value op (expr)->binary_operator.right->number_value)
 
-#define CONCAT_2INT(expr, op) if (TEST_LEFT_RIGHT(expr, IS_INT_CONST)) (expr) = MKVAL(expr, op, make_int);
-#define CONCAT_2BOOL(expr, op) if (TEST_LEFT_RIGHT(expr, IS_BOOL_CONST)) (expr) = MKVAL(expr, op, make_bool);
+#define CONCAT_2INT(expr, op) if (TEST_LEFT_RIGHT(expr, IS_INT_CONST)) { (expr) = MKVAL(expr, op, make_int); OC(); O_DEBUG("Precalc int const expression " #op); }
+#define CONCAT_2BOOL(expr, op) if (TEST_LEFT_RIGHT(expr, IS_BOOL_CONST)) { (expr) = MKVAL(expr, op, make_bool); OC(); O_DEBUG("Precalc bool const expression " #op); }
 
 #define UNARY_MAKE_NEW(expr, condition, make_new, op) if (condition((expr)->unary_operator.operand)) (expr) = make_new(op (expr)->unary_operator.operand->number_value)
 
@@ -593,23 +599,71 @@ static void optimize_expr(ast_node **expr) {
     }
 }
 
-void optimize_ast(ast_node *ast) {
+void optimize_const_expr(ast_node *ast) {
     switch (ast->type) {
         case NODE_FUNCTION:
-            optimize_ast(ast->function.body); break;
+            optimize_const_expr(ast->function.body); break;
         case NODE_SEQUENCE:
-            optimize_ast(ast->sequence.first);
-            optimize_ast(ast->sequence.second); break;
+            optimize_const_expr(ast->sequence.first);
+            optimize_const_expr(ast->sequence.second); break;
         case NODE_ASSIGNEMENT:
             optimize_expr(&ast->assignement.expr); break;
         case NODE_RETURN:
             optimize_expr(&ast->inst_return.expr); break;
         case NODE_IF_STATEMENT:
             optimize_expr(&ast->if_statement.condition);
-            optimize_ast(ast->if_statement.then_block);
-            optimize_ast(ast->if_statement.else_block); break;
+            optimize_const_expr(ast->if_statement.then_block);
+            optimize_const_expr(ast->if_statement.else_block); break;
         default:
             break;
+    }
+}
+
+void optimize_ast(ast_node *ast, int debug) {
+    g_odebug = debug;
+    if (debug) printf("Optimize start\n");
+    
+    do {
+        g_ochanged = 0;
+        optimize_const_expr(ast);
+    } while (g_ochanged == 1);
+
+    if (debug) printf("Optimize end\n\n");
+}
+
+
+//  ------------------------------------------------------------------------  //
+//  ------------------------------------------------------------------------  //
+//  ------------------------------------------------------------------------  //
+//  ------------------------   Vérification d'AST   ------------------------  //
+//  ------------------------------------------------------------------------  //
+//  ------------------------------------------------------------------------  //
+//  ------------------------------------------------------------------------  //
+static int check_all_path_returns(ast_node *ast) {
+    if (ast == NULL) {
+        return 0;
+    }
+
+    switch (ast->type) {
+        case NODE_RETURN:
+            return 1;
+        case NODE_SEQUENCE:
+            return check_all_path_returns(ast->sequence.first)
+                || check_all_path_returns(ast->sequence.second);
+        case NODE_IF_STATEMENT:
+            return check_all_path_returns(ast->if_statement.then_block)
+                && check_all_path_returns(ast->if_statement.else_block);
+        case NODE_DO_FOR_I:
+            return check_all_path_returns(ast->do_for_i.body);
+        default:
+            return 0;
+    }
+}
+
+void check_ast_code(ast_node *ast) {
+    if (ast->type != NODE_FUNCTION) { ERROR("The AST to verfify is not a function"); }
+    if (!check_all_path_returns(ast->function.body)) {
+        ERRORF("Some paths do not return any value in function %s\n", ast->function.function_name);
     }
 }
 
