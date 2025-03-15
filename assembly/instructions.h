@@ -95,6 +95,22 @@
 #define AND() C("OP And"); POP(R2); POP(R1); printf("\tand %s,%s\n", R1, R2); PUSH(R1);
 #define OR() C("OP Or"); POP(R2); POP(R1); printf("\tor %s,%s\n", R1, R2); PUSH(R1);
 
+#define EQUAL() {                                                              \
+        C("Op Equal");                                                         \
+        int equal_counter = counter();                                         \
+        printf("\tconst %s,op__equal_true__%d\n", R3, equal_counter);          \
+        POP(R2); POP(R1); CMP(R1, R2);                                         \
+        JMPC(R3);                                                              \
+        CONSTINT(R1, 0);                                                       \
+        printf("\tconst %s,op__equal__end__%d\n", R3, equal_counter);          \
+        JMP(R3);                                                               \
+        printf(":op__equal_true__%d\n", equal_counter);                        \
+        CONSTINT(R1, 1);                                                       \
+        printf(":op__equal__end__%d\n", equal_counter);                        \
+        PUSH(R1);                                                              \
+    }
+
+
 #define NOT() C("OP Not");                                                     \
     POP(R1); PUSH(R2); CONSTINT(R2, 2)                                         \
     printf("\tnot %s\n\tadd %s,%s\n", R1, R1, R2);                             \

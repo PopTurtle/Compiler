@@ -1,0 +1,8 @@
+\begin{algo}{rec}{n}
+    \IF{n == 0}
+        \RETURN{10}
+    \ENDIF
+    \RETURN{rec}{n - 1}
+\end{algo}
+
+\CALL{rec}{3000}

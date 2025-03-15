@@ -17,6 +17,8 @@ typedef enum {
 
     OP_AND,
     OP_OR,
+
+    OP_EQUAL,
 } binary_operator_t;
 
 typedef struct ast_node ast_node;
@@ -44,7 +46,7 @@ extern ast_node *make_do_while(ast_node *condition, ast_node *body);
 extern ast_node *make_function(const char *function_name, ast_node *body);
 extern ast_node *make_sequence(ast_node *first, ast_node *second);
 
-extern void optimize_ast(ast_node *ast, int debug);
+extern void optimize_ast(algorithms_map *algs, ast_node *ast, int debug);
 extern void check_ast_code(ast_node *ast);
 extern void write_all_instructions(algorithms_map *algs, ast_node *main_call);
 

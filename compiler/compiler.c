@@ -28,6 +28,8 @@ static int g_no_optimization = 0;
 
 const char *g_exec_name;
 
+algorithms_map *g_algs_map;
+
 int main(int argc, char *argv[]) {
     g_exec_name = argv[0];
     for (int i = 1; i < argc; ++i) {
@@ -44,37 +46,33 @@ int main(int argc, char *argv[]) {
     variables_map *algv2 = get_alg_variables(alg2);
 
     // VARS
-    create_parameter(algv1, "a");
-    create_parameter(algv1, "b");
-    create_local(algv1, "p", TYPE_UNKNOWN);
-    create_local(algv1, "k", TYPE_UNKNOWN);
+    create_parameter(algv1, "n");
+    //create_parameter(algv1, "b");
+    //create_parameter(algv1, "acc");
+    //create_local(algv1, "p", TYPE_UNKNOWN);
+    //create_local(algv1, "k", TYPE_UNKNOWN);
 
     // Arbre de l'algorithme Algo1
+    ast_node *params1[] = { make_binary_operator(make_symbol("n"), OP_SUB, make_int(1)) };
     ast_node *node1 = 
     make_function(get_alg_name(alg1),
         make_sequence(
-            make_assignement("p", make_int(1)),
-            make_sequence(
-                make_do_for_i(
-                    "k", make_int(1), make_symbol("b"),
-                    make_assignement("p", make_binary_operator(make_symbol("p"), OP_MUL, make_symbol("a")))
-                ),
-                make_return(make_symbol("p"))
+            make_if_statement(
+                make_binary_operator(make_symbol("n"), OP_EQUAL, make_int(0)),
+                make_return(make_int(10)),
+                NULL
+            ),
+            make_return(
+                make_call("Algo1", params1, 1)
             )
         )
     );
 
     // Arbre de l'algorithme Algo2
-    ast_node *params2[] = { make_int(3), make_int(4) };
+    ast_node *params2[] = { make_int(3000) };
     ast_node *node2 = 
     make_function(get_alg_name(alg2),
-        make_sequence(
-            make_do_while(
-                make_bool(1),
-                NULL
-            ),
-            make_return(make_int(45))
-        )
+        make_return(make_call("Algo1", params2, 1))
     );
 
     //// Remplissage des variables de Algo1
@@ -111,6 +109,8 @@ int main(int argc, char *argv[]) {
     associate_tree(alg1, node1);
     associate_tree(alg2, node2);
     // -------------------------------------------------------------------------
+
+    g_algs_map = algs_map;
 
     debug_print_part(algs_map, 1, "Type resolving");
     resolve_types(algs_map);
@@ -179,7 +179,7 @@ void print_alg([[ maybe_unused ]] const char *alg_name, algorithm *alg) {
 }
 
 void optimize_alg([[ maybe_unused ]] const char *alg_name, algorithm *alg) {
-    optimize_ast(get_alg_tree(alg), g_debug);
+    optimize_ast(g_algs_map, get_alg_tree(alg), g_debug);
 }
 
 void check_code([[ maybe_unused ]] const char *alg_name, algorithm *alg) {

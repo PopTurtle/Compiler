@@ -24,6 +24,9 @@ typedef enum {
     // Suite d'instructions
     NODE_FUNCTION,
     NODE_SEQUENCE,
+
+    // Noeuds spéciaux
+    NODE_SPEC_PARAMS_REASSIGN,
 } ast_node_type;
 
 struct ast_node {
@@ -41,8 +44,12 @@ struct ast_node {
         struct { ast_node *condition; ast_node *body; } do_while;
         struct { char *function_name; ast_node *body; } function;
         struct { ast_node *first; ast_node *second; } sequence;
+        struct { ast_node **parameters_expr; int params_count; } spec_params_reassign;
     };
 };
+
+
+static ast_node *make_spec_params_reassign(ast_node **params_expr, int pcount);
 
 
 //  ------------------------------------------------------------------------  //
@@ -253,6 +260,11 @@ static void resolve_types_in_binary_operation(ast_node *binary_op, algorithm *cu
                 binary_op->binary_operator.result_type = TYPE_BOOL;
             }
             break;
+        case OP_EQUAL: // ne supporte pas bool == bool pour le moment
+            if (check_binary_operation_type(binary_op, vars, TYPE_INT, TYPE_INT)) {
+                binary_op->binary_operator.result_type = TYPE_BOOL;
+            }
+            break;
         default:
             ERROR("Unmanaged operator\n");
     }
@@ -345,6 +357,7 @@ static void write_binary_operator_code(ast_node *op) {
         case OP_DIV: DIV(); break;
         case OP_AND: AND(); break;
         case OP_OR: OR(); break;
+        case OP_EQUAL: EQUAL(); break;
         default:
             ERROR("Unsupported binary operator during code writing\n");
     }
@@ -514,6 +527,20 @@ static void write_instructions(ast_node *ast) {
             C("Do while loop end");
             break;
 
+        case NODE_SPEC_PARAMS_REASSIGN:
+            // Calcul des nouvelles valeurs
+            variables_map *vars = get_alg_variables(g_wcurrent);
+            for (int i = 0; i < params_count(vars); ++i) {
+                write_expression_code(ast->spec_params_reassign.parameters_expr[i]);
+            }
+            // Assignations aux parametres
+            for (int i = params_count(vars) - 1; i >= 0; --i) {
+                LOAD_PARAM_ADDR(R1, R2, i, locals_count(vars));
+                POP(R2);
+                STOREW(R2, R1);
+            }
+            break;
+
         default:
             ERROR("Unsupported operation, cannot write code\n");
     }
@@ -601,7 +628,9 @@ static int check_all_path_returns(ast_node *ast) {
         case NODE_DO_FOR_I:
             return check_all_path_returns(ast->do_for_i.body);
         case NODE_DO_WHILE:
-            return check_all_path_returns(ast->do_while.body);
+            return check_all_path_returns(ast->do_while.body)
+                || (ast->do_while.condition->type == NODE_CONST_BOOL
+                    && ast->do_while.condition->number_value != 0); // Fix temporaire ?
         default:
             return 0;
     }
@@ -662,7 +691,7 @@ static void optimize_expr(ast_node **expr) {
 
                 case OP_AND: CONCAT_2BOOL(*expr, &&); break;
                 case OP_OR: CONCAT_2BOOL(*expr, ||); break;
-                
+
                 default: break;
             }
             break;
@@ -681,19 +710,19 @@ static void optimize_const_expr(ast_node *ast) {
             optimize_const_expr(ast->sequence.first);
             optimize_const_expr(ast->sequence.second); break;
         case NODE_ASSIGNEMENT:
-            optimize_expr(&ast->assignement.expr); break;
+            optimize_expr(&(ast->assignement.expr)); break;
         case NODE_RETURN:
-            optimize_expr(&ast->inst_return.expr); break;
+            optimize_expr(&(ast->inst_return.expr)); break;
         case NODE_IF_STATEMENT:
-            optimize_expr(&ast->if_statement.condition);
+            optimize_expr(&(ast->if_statement.condition));
             optimize_const_expr(ast->if_statement.then_block);
             optimize_const_expr(ast->if_statement.else_block); break;
         case NODE_DO_FOR_I:
-            optimize_expr(&ast->do_for_i.start_expr);
-            optimize_expr(&ast->do_for_i.end_expr);
+            optimize_expr(&(ast->do_for_i.start_expr));
+            optimize_expr(&(ast->do_for_i.end_expr));
             optimize_const_expr(ast->do_for_i.body); break;
         case NODE_DO_WHILE:
-            optimize_expr(&ast->do_while.condition);
+            optimize_expr(&(ast->do_while.condition));
             optimize_const_expr(ast->do_while.body); break;
         default:
             break;
@@ -774,7 +803,54 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
     }
 }
 
-void optimize_ast(ast_node *ast, int debug) {
+static ast_node **get_last_return(ast_node **ast_ptr) { // est-ce qu'on a bien le last return ? ------------------------------------------------------------------------------
+    ast_node *ast = *ast_ptr;
+    switch (ast->type) {
+        case NODE_RETURN: return ast_ptr;
+        case NODE_FUNCTION: return get_last_return(&(ast->function.body));
+        case NODE_SEQUENCE: return get_last_return(&(ast->sequence.second));
+        
+        default:
+            return NULL;
+    }
+}
+static int is_recursive_return(const char *alg_name, ast_node *return_s) {
+    if (return_s->inst_return.expr->type == NODE_CALL
+        && strcmp(alg_name, return_s->inst_return.expr->call.function_name) == 0) {
+            return 1;
+    }
+    return 0;
+}
+
+static void optimize_tail_call_recursion(algorithm *alg, ast_node *ast) {
+    if (ast == NULL || ast->type != NODE_FUNCTION) return;
+
+    // Récupère le dernier return et vérifie qu'il s'agit d'un appel récursif
+    ast_node **return_s_ptr = get_last_return(&ast);
+    if (return_s_ptr == NULL || !is_recursive_return(get_alg_name(alg), *return_s_ptr)) {
+        return;
+    }
+
+    // On récupère le corps et le return de la fonction
+    ast_node *body = ast->function.body;
+    ast_node *return_s = *return_s_ptr;
+    *return_s_ptr = NULL;
+
+    // Reconstruis l'arbre de la fonction
+    ast_node *calln = return_s->inst_return.expr;
+    ast->function.body = make_do_while(
+        make_bool(1),
+        make_sequence(
+            body,
+            make_spec_params_reassign(calln->call.parameters_expr, calln->call.params_count)
+        )
+    );
+
+    OC();
+    O_DEBUGF("Tail call recursion removed for function %s", get_alg_name(alg));
+}
+
+void optimize_ast(algorithms_map *algs, ast_node *ast, int debug) {
     if (ast->type != NODE_FUNCTION) {
         ERROR("Cannot optimize a non function AST");
     }
@@ -793,7 +869,8 @@ void optimize_ast(ast_node *ast, int debug) {
         // var usage (const var)
         // remove dead assignement (& dead vars ?)
 
-        // tail call recursion
+        algorithm *alg = get_algorithm(algs, ast->function.function_name);
+        optimize_tail_call_recursion(alg, ast);
 
     } while (g_ochanged > 0);
 
@@ -915,6 +992,14 @@ ast_node *make_sequence(ast_node *first, ast_node *second) {
     return node;
 }
 
+ast_node *make_spec_params_reassign(ast_node **params_expr, int pcount) {
+    ast_node *node = canode();
+    node->type = NODE_SPEC_PARAMS_REASSIGN;
+    node->spec_params_reassign.parameters_expr = params_expr;
+    node->spec_params_reassign.params_count = pcount;
+    return node;
+}
+
 
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
@@ -997,6 +1082,12 @@ static void print_ast_aux(const ast_node *ast, int depth) {
             printf("%sSequence\n", prefix);
             print_ast_aux(ast->sequence.first, D);
             print_ast_aux(ast->sequence.second, D);
+            break;
+        case NODE_SPEC_PARAMS_REASSIGN:
+            printf("%sParameters reassignement\n", prefix);
+            for (int i = 0; i < ast->spec_params_reassign.params_count; ++i) {
+                print_ast_aux(ast->spec_params_reassign.parameters_expr[i], D);
+            }
             break;
         default:
             printf("%sUnknown node type\n", prefix);

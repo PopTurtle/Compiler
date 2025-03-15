@@ -24,19 +24,21 @@ function compile {
 }
 
 #  test [file_name] [expected_result] : compile et execute le fichier
-#    se trouvant au chemin ./codes/[file_name], et vérifie que le résultat
+#    se trouvant au chemin ./codes/[file_name].algo, et vérifie que le résultat
 #    renvoyé par l'execution est [expected_result].
 function test {
-    compile "$codes_dir$1"
+    compile "$codes_dir$1.algo"
     test_cmd "sipro $compiled_sipro_path" $2
-    echo "File $1 passed"
+    echo "File $1.algo passed"
 }
 
 # all_tests : Lance les tests unitaires
 function all_tests {
-    test simple.algo 5
-    #test assignement.algo 18
-    #test if_and_recursive.algo 13
+    test simple 5
+    #test assignement 18
+    #test if_and_recursive 13
+    #test recursion 81
+    #test recursion_opt 10
 }
 
 
