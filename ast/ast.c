@@ -599,7 +599,7 @@ static void optimize_expr(ast_node **expr) {
     }
 }
 
-void optimize_const_expr(ast_node *ast) {
+static void optimize_const_expr(ast_node *ast) {
     switch (ast->type) {
         case NODE_FUNCTION:
             optimize_const_expr(ast->function.body); break;
@@ -620,12 +620,19 @@ void optimize_const_expr(ast_node *ast) {
 }
 
 void optimize_ast(ast_node *ast, int debug) {
+    if (ast->type != NODE_FUNCTION) {
+        ERROR("Cannot optimize a non function AST");
+    }
+
     g_odebug = debug;
-    if (debug) printf("Optimize start\n");
+    if (debug) printf("Optimize start for function %s\n", ast->function.function_name);
     
     do {
         g_ochanged = 0;
+
         optimize_const_expr(ast);
+        
+
     } while (g_ochanged == 1);
 
     if (debug) printf("Optimize end\n\n");
