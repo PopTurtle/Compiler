@@ -548,7 +548,7 @@ void write_all_instructions(algorithms_map *algs, ast_node *main_call) {
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
-//  ------------------------   Optimisation d'ast   ------------------------  //
+//  ------------------------   Optimisation d'AST   ------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
@@ -617,7 +617,7 @@ void optimize_ast(ast_node *ast) {
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
-//  --------------------------   Création d'ast   --------------------------  //
+//  --------------------------   Création d'AST   --------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
@@ -724,10 +724,12 @@ ast_node *make_sequence(ast_node *first, ast_node *second) {
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
-//  -------------------------   Affichage d'ast   --------------------------  //
+//  -------------------------   Affichage d'AST   --------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
+#define D (depth + 1)
+
 static void print_ast_aux(const ast_node *ast, int depth) {
     char *prefix = cralloc((size_t) depth * 2 + 2);
     prefix[depth * 2] = '|';
@@ -754,47 +756,47 @@ static void print_ast_aux(const ast_node *ast, int depth) {
             break;
         case NODE_UNARY_OPERATOR:
             printf("%sUnary expression, OP: %d, result in %s\n", prefix, ast->unary_operator.operator, value_type_to_string(ast->unary_operator.result_type));
-            print_ast_aux(ast->unary_operator.operand, depth + 1);
+            print_ast_aux(ast->unary_operator.operand, D);
             break;
         case NODE_BINARY_OPERATOR:
             printf("%sExpression, OP: %d, result in %s\n", prefix, ast->binary_operator.operator, value_type_to_string(ast->binary_operator.result_type));
-            print_ast_aux(ast->binary_operator.left, depth + 1);
-            print_ast_aux(ast->binary_operator.right, depth + 1);
+            print_ast_aux(ast->binary_operator.left, D);
+            print_ast_aux(ast->binary_operator.right, D);
             break;
         case NODE_ASSIGNEMENT:
             printf("%sAssignement to '%s'\n", prefix, ast->assignement.var_name);
-            print_ast_aux(ast->assignement.expr, depth + 1);
+            print_ast_aux(ast->assignement.expr, D);
             break;
         case NODE_CALL:
             printf("%sCall to %s with %d arg(s)\n", prefix, ast->call.function_name, ast->call.params_count);
             for (int i = 0; i < ast->call.params_count; ++i) {
-                print_ast_aux(ast->call.parameters_expr[i], depth + 1);
+                print_ast_aux(ast->call.parameters_expr[i], D);
             }
             break;
         case NODE_RETURN:
             printf("%sReturn value\n", prefix);
-            print_ast_aux(ast->inst_return.expr, depth + 1);
+            print_ast_aux(ast->inst_return.expr, D);
             break;
         case NODE_IF_STATEMENT:
             printf("%sIf statement\n", prefix);
-            print_ast_aux(ast->if_statement.condition, depth + 1);
-            print_ast_aux(ast->if_statement.then_block, depth + 1);
-            print_ast_aux(ast->if_statement.else_block, depth + 1);
+            print_ast_aux(ast->if_statement.condition, D);
+            print_ast_aux(ast->if_statement.then_block, D);
+            print_ast_aux(ast->if_statement.else_block, D);
             break;
         case NODE_DO_FOR_I:
             printf("%sDo for %s increments\n", prefix, ast->do_for_i.var_name);
-            print_ast_aux(ast->do_for_i.start_expr, depth + 1);
-            print_ast_aux(ast->do_for_i.end_expr, depth + 1);
-            print_ast_aux(ast->do_for_i.body, depth + 1);
+            print_ast_aux(ast->do_for_i.start_expr, D);
+            print_ast_aux(ast->do_for_i.end_expr, D);
+            print_ast_aux(ast->do_for_i.body, D);
             break;
         case NODE_FUNCTION:
             printf("%sFonction %s\n", prefix, ast->function.function_name);
-            print_ast_aux(ast->function.body, depth + 1);
+            print_ast_aux(ast->function.body, D);
             break;
         case NODE_SEQUENCE:
             printf("%sSequence\n", prefix);
-            print_ast_aux(ast->sequence.first, depth + 1);
-            print_ast_aux(ast->sequence.second, depth + 1);
+            print_ast_aux(ast->sequence.first, D);
+            print_ast_aux(ast->sequence.second, D);
             break;
         default:
             printf("%sUnknown node type\n", prefix);
