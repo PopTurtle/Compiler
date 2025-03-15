@@ -1,0 +1,9 @@
+\begin{algo}{if_and_recursive}{n}
+    \IF{n <= 0}
+        \RETURN{3}
+    \ELSE
+        \RETURN{2 + \CALL{if_and_recursive}{n - 1}}
+    \FI
+\end{algo}
+
+\CALL{if_and_recursive}{5}

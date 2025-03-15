@@ -1,0 +1,6 @@
+\begin{algo}{assignement}{a, b}
+    \SET{result}{a + 5 * b}
+    \RETURN{result - 4}
+\end{algo}
+
+\CALL{assignement}{2, 4}

@@ -1,0 +1,9 @@
+\begin{algo}{Algo1}{a, b}
+    \set{c}{a + \call{Algo2}{b}}
+    \return{c}
+\end{algo}
+
+\begin{algo}{Algo2}{param}
+    
+    \return{param + 5}
+\end{algo}

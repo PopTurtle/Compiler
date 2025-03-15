@@ -1,0 +1,5 @@
+\begin{algo}{simple}{}
+    \RETURN{5}
+\end{algo}
+
+\CALL{simple}
