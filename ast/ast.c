@@ -546,6 +546,42 @@ void write_all_instructions(algorithms_map *algs, ast_node *main_call) {
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
+//  ------------------------   Vérification d'AST   ------------------------  //
+//  ------------------------------------------------------------------------  //
+//  ------------------------------------------------------------------------  //
+//  ------------------------------------------------------------------------  //
+static int check_all_path_returns(ast_node *ast) {
+    if (ast == NULL) {
+        return 0;
+    }
+
+    switch (ast->type) {
+        case NODE_RETURN:
+            return 1;
+        case NODE_SEQUENCE:
+            return check_all_path_returns(ast->sequence.first)
+                || check_all_path_returns(ast->sequence.second);
+        case NODE_IF_STATEMENT:
+            return check_all_path_returns(ast->if_statement.then_block)
+                && check_all_path_returns(ast->if_statement.else_block);
+        case NODE_DO_FOR_I:
+            return check_all_path_returns(ast->do_for_i.body);
+        default:
+            return 0;
+    }
+}
+
+void check_ast_code(ast_node *ast) {
+    if (ast->type != NODE_FUNCTION) { ERROR("The AST to verfify is not a function"); }
+    if (!check_all_path_returns(ast->function.body)) {
+        ERRORF("Some paths do not return any value in function %s\n", ast->function.function_name);
+    }
+}
+
+
+//  ------------------------------------------------------------------------  //
+//  ------------------------------------------------------------------------  //
+//  ------------------------------------------------------------------------  //
 //  ------------------------   Optimisation d'AST   ------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
@@ -619,6 +655,72 @@ static void optimize_const_expr(ast_node *ast) {
     }
 }
 
+//#define IS_CONST(ast) (ast->type == NODE_CONST_INT || ast->type == NODE_CONST_BOOL)
+//
+//static void optimize_var_usage(ast_node *ast, hashtable* constants[], int depth) {
+//    switch (ast->type) {
+//        case NODE_FUNCTION:
+//            optimize_var_usage(ast->function.body, constants, depth);
+//            break;
+//        case NODE_ASSIGNEMENT:
+//            if (IS_CONST(ast->assignement.expr)) {
+//                hashtable_add(constants[depth], ast->assignement.var_name, ast->assignement.expr);
+//            }
+//            break;
+//        
+//        default:
+//            break;
+//    }
+//}
+//
+//static void optimize_var_usage_pre(ast_node *ast) {
+//    hashtable *constant_storages[] = cralloc(256 * sizeof *constant_storages);
+//    optimize_var_usage(ast, constant_storages, 0);
+//    free(constant_storages);
+//}
+
+static void optimize_dead_blocks(ast_node **ast_ptr) {
+    ast_node *ast = *ast_ptr;
+    if (ast == NULL) return;
+
+    switch (ast->type) {
+        case NODE_FUNCTION:
+            optimize_dead_blocks(&(ast->function.body)); break;
+        case NODE_SEQUENCE: // if return delete after
+            optimize_dead_blocks(&(ast->sequence.first));
+            optimize_dead_blocks(&(ast->sequence.second));
+            if (check_all_path_returns(ast->sequence.first)) {
+                // La seconde partie de la sequence ne sera jamais executee
+                OC(); O_DEBUG("Removing useless code after return statement");
+                *ast_ptr = ast->sequence.first;
+            }
+            break;
+        
+        case NODE_IF_STATEMENT:
+            if (IS_BOOL_CONST(ast->if_statement.condition)) {
+                OC(); O_DEBUG("If statement reduction, condition was bool constant");
+                if (ast->if_statement.condition->number_value != 0) { // if (true)
+                    *ast_ptr = ast->if_statement.then_block;
+                } else { // if (false)
+                    *ast_ptr = ast->if_statement.else_block;
+                }
+            }
+            break;
+
+        case NODE_DO_FOR_I:
+            if (IS_INT_CONST(ast->do_for_i.start_expr) && IS_INT_CONST(ast->do_for_i.end_expr)) {
+                if (ast->do_for_i.start_expr->number_value > ast->do_for_i.end_expr->number_value) {
+                    // La boucle ne fera aucun tour
+                    OC(); O_DEBUG("Do for statement reduction, no iterations");
+                    *ast_ptr = NULL;
+                }
+            }
+            break;
+
+        default: break;
+    }
+}
+
 void optimize_ast(ast_node *ast, int debug) {
     if (ast->type != NODE_FUNCTION) {
         ERROR("Cannot optimize a non function AST");
@@ -630,48 +732,19 @@ void optimize_ast(ast_node *ast, int debug) {
     do {
         g_ochanged = 0;
 
+        // a refaire car ne precalc pas 6 + d + 2 ou encore false && c
         optimize_const_expr(ast);
         
+        optimize_dead_blocks(&ast);
 
-    } while (g_ochanged == 1);
+        // var usage (const var)
+        // remove dead assignement (& dead vars ?)
+
+        // tail call recursion
+
+    } while (g_ochanged > 0);
 
     if (debug) printf("Optimize end\n\n");
-}
-
-
-//  ------------------------------------------------------------------------  //
-//  ------------------------------------------------------------------------  //
-//  ------------------------------------------------------------------------  //
-//  ------------------------   Vérification d'AST   ------------------------  //
-//  ------------------------------------------------------------------------  //
-//  ------------------------------------------------------------------------  //
-//  ------------------------------------------------------------------------  //
-static int check_all_path_returns(ast_node *ast) {
-    if (ast == NULL) {
-        return 0;
-    }
-
-    switch (ast->type) {
-        case NODE_RETURN:
-            return 1;
-        case NODE_SEQUENCE:
-            return check_all_path_returns(ast->sequence.first)
-                || check_all_path_returns(ast->sequence.second);
-        case NODE_IF_STATEMENT:
-            return check_all_path_returns(ast->if_statement.then_block)
-                && check_all_path_returns(ast->if_statement.else_block);
-        case NODE_DO_FOR_I:
-            return check_all_path_returns(ast->do_for_i.body);
-        default:
-            return 0;
-    }
-}
-
-void check_ast_code(ast_node *ast) {
-    if (ast->type != NODE_FUNCTION) { ERROR("The AST to verfify is not a function"); }
-    if (!check_all_path_returns(ast->function.body)) {
-        ERRORF("Some paths do not return any value in function %s\n", ast->function.function_name);
-    }
 }
 
 

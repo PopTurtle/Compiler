@@ -1,9 +1,11 @@
-\begin{algo}{Algo1}{a, b}
-    \set{c}{a + \call{Algo2}{b}}
-    \return{c}
+\begin{algo}{opt}{a, b}
+    \SET{a}{56 + 32 - 7}
+    \SET{b}{a / 2}
+    \SET{c}{true}
+    \IF{b > a && c}
+        \SET{b}{5}
+    \ENDIF
+    \RETURN{b}
 \end{algo}
 
-\begin{algo}{Algo2}{param}
-    
-    \return{param + 5}
-\end{algo}
+\CALL{opt}{2, 3}
