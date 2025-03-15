@@ -120,18 +120,18 @@
 #define EQUAL() BOOL_OP(cmp);
 #define LESS() BOOL_OP(uless);
 
-#define LESS_EQ()                                                               \
-        {                                                                       \
-            int op_counter = counter();                                         \
-            LESS();                                                             \
-            printf("\tconst %s,op__equal__%d\n", R4, op_counter);               \
-            CMP(R3, R3);                                                        \
-            JMPZ(R4);                                                           \
-            printf("\tconst %s,op__end__%d\n", R4, op_counter);                 \
-            JMP(R4);                                                            \
-            printf(":op__equal__%d\n", op_counter);                             \
-            EQUAL();                                                            \
-            printf(":op__end__%d\n", op_counter);                               \
+#define LESS_EQ()                                                              \
+        {                                                                      \
+            int op_counter = counter();                                        \
+            LESS();                                                            \
+            printf("\tconst %s,op__equal__%d\n", R4, op_counter);              \
+            CMP(R3, R3);                                                       \
+            JMPZ(R4);                                                          \
+            printf("\tconst %s,op__end__%d\n", R4, op_counter);                \
+            JMP(R4);                                                           \
+            printf(":op__equal__%d\n", op_counter);                            \
+            EQUAL();                                                           \
+            printf(":op__end__%d\n", op_counter);                              \
         }
 
 #define EQUAL_OP() POP(R2); POP(R1); EQUAL(); PUSH(R3);
