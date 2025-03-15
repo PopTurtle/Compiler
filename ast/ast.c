@@ -780,10 +780,17 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
                 // La seconde partie de la sequence ne sera jamais executee
                 OC(); O_DEBUG("Removing useless code after return statement");
                 *ast_ptr = ast->sequence.first;
+                break;
+            }
+            if (ast->sequence.first == NULL && ast->sequence.second == NULL) {
+                OC(); O_DEBUG("Removed empty sequence");
+                *ast_ptr = NULL;
+                break;
             }
             break;
         
         case NODE_IF_STATEMENT:
+            // Supprime les ifs dont les conditions sont constantes
             if (IS_BOOL_CONST(ast->if_statement.condition)) {
                 OC(); O_DEBUG("If statement reduction, condition was bool constant");
                 if (ast->if_statement.condition->number_value != 0) { // if (true)
@@ -791,6 +798,14 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
                 } else { // if (false)
                     *ast_ptr = ast->if_statement.else_block;
                 }
+            }
+
+            // Déplace le block ELSE dans THEN si le block THEN est vide
+            if (ast->if_statement.then_block == NULL && ast->if_statement.else_block != NULL) {
+                OC(); O_DEBUG("If statement switch, THEN block was empty while ELSE wasn't");
+                ast->if_statement.condition = make_unary_operator(OP_NOT, ast->if_statement.condition);
+                ast->if_statement.then_block = ast->if_statement.else_block;
+                ast->if_statement.else_block = NULL;
             }
             break;
 
@@ -817,7 +832,7 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
 }
 
 static ast_node **get_last_return(ast_node **ast_ptr) { // est-ce qu'on a bien le last return ? ------------------------------------------------------------------------------
-    ast_node *ast = *ast_ptr;
+    ast_node *ast = *ast_ptr; // ajouter le support pour if A else return ---------------------------------------------------------------------------------------------
     switch (ast->type) {
         case NODE_RETURN: return ast_ptr;
         case NODE_FUNCTION: return get_last_return(&(ast->function.body));
@@ -835,6 +850,17 @@ static int is_recursive_return(const char *alg_name, ast_node *return_s) {
     return 0;
 }
 
+static void optimize_tail_call_rebuild_func(ast_node *func, ast_node *body, ast_node *return_s) {
+    ast_node *calln = return_s->inst_return.expr;
+    func->function.body = make_do_while(
+        make_bool(1),
+        make_sequence(
+            body,
+            make_spec_params_reassign(calln->call.parameters_expr, calln->call.params_count)
+        )
+    );
+}
+
 static void optimize_tail_call_recursion(algorithm *alg, ast_node *ast) {
     if (ast == NULL || ast->type != NODE_FUNCTION) return;
 
@@ -850,14 +876,7 @@ static void optimize_tail_call_recursion(algorithm *alg, ast_node *ast) {
     *return_s_ptr = NULL;
 
     // Reconstruis l'arbre de la fonction
-    ast_node *calln = return_s->inst_return.expr;
-    ast->function.body = make_do_while(
-        make_bool(1),
-        make_sequence(
-            body,
-            make_spec_params_reassign(calln->call.parameters_expr, calln->call.params_count)
-        )
-    );
+    optimize_tail_call_rebuild_func(ast, body, return_s);
 
     OC();
     O_DEBUGF("Tail call recursion removed for function %s", get_alg_name(alg));
@@ -874,7 +893,7 @@ void optimize_ast(algorithms_map *algs, ast_node *ast, int debug) {
     do {
         g_ochanged = 0;
 
-        // a refaire car ne precalc pas 6 + d + 2 ou encore false && c
+        // a refaire car ne precalc pas 6 + d + 2 ou encore false && c ---------------------------------------------------------
         optimize_const_expr(ast);
         
         optimize_dead_blocks(&ast);

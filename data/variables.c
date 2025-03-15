@@ -50,8 +50,8 @@ static variable *create_var(variables_map *map, const char *var_name, value_type
     return var;
 }
 
-variable *create_local(variables_map *map, const char *var_name, value_type var_type) {
-    variable *var = create_var(map, var_name, var_type);
+variable *create_local(variables_map *map, const char *var_name) {
+    variable *var = create_var(map, var_name, TYPE_UNKNOWN);
     var->semantic = SEM_LOCAL;
     var->position = map->locals_count++;
     return var;
