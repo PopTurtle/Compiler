@@ -468,10 +468,9 @@ static void write_instructions(ast_node *ast) {
             CONSTSTR(R3, sbf);
             
             // If
-            CONSTINT(R2, 0);
             POP(R1);
-            CMP(R1, R2);
-            JMPC(R3);
+            CMP(R1, R1);
+            JMPZ(R3);
             
             // Then
             write_instructions(ast->if_statement.then_block);
