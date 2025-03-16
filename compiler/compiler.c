@@ -47,40 +47,30 @@ int main(int argc, char *argv[]) {
 
     // VARS
     create_parameter(algv1, "n");
+    create_local(algv1, "a");
 
     // Arbre de l'algorithme Algo1
     ast_node *params1[] = { make_binary_operator(make_symbol("n"), OP_SUB, make_int(1)) };
     ast_node *node1 = 
     make_function(get_alg_name(alg1),
-        make_sequence(
-            make_if_statement(
-                make_binary_operator(make_symbol("n"), OP_ELT, make_int(4000)),
-                make_assignement("n", make_int(2900)),
-                NULL
-            ),
-            make_sequence(
-                make_if_statement(
-                    make_binary_operator(make_symbol("n"), OP_SLT, make_int(1000)),
-                    NULL,
-                    make_return(make_symbol("n"))
-                ),
-                make_return(make_int(50))
-            )
-        )
+        make_return(make_binary_operator(make_symbol("n"), OP_SUB, make_int(1)))
     );
 
     // Arbre de l'algorithme Algo2
-    ast_node *params2[] = { make_int(4000) };
+    ast_node *params2_3[] = { make_int(5) };
+    ast_node *params2_2[] = { make_call("Algo1", params2_3, 1) };
+    ast_node *params2_1[] = { make_call("Algo1", params2_2, 1) };
+
     ast_node *node2 = 
     make_function(get_alg_name(alg2),
-        make_return(make_call("Algo1", params2, 1))
+        make_return(make_call("Algo1", params2_1, 1))
     );
 
     // Association
     associate_tree(alg1, node1);
     associate_tree(alg2, node2);
     // -------------------------------------------------------------------------
-
+    
     g_algs_map = algs_map;
 
     debug_print_part(algs_map, 1, "Type resolving");
@@ -154,7 +144,7 @@ void optimize_alg([[ maybe_unused ]] const char *alg_name, algorithm *alg) {
 }
 
 void check_code([[ maybe_unused ]] const char *alg_name, algorithm *alg) {
-    check_ast_code(get_alg_tree(alg));
+    check_ast_code(get_alg_tree(alg), g_algs_map);
 }
 
 

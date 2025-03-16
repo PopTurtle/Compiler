@@ -76,6 +76,9 @@ extern void *hashtable_search(hashtable *ht, const void *keyref);
 //    couples clé-valeur contenus dans la table
 extern void hashtable_foreach(const hashtable *ht, void (*callback)(const void *keyref, const void *valref));
 
+//  hashtable_cpy : copie tous les couples clé valeurs de la table src dans dest
+extern void hashtable_extend(hashtable *dest, const hashtable *src);
+
 #if defined HASHTABLE_STATS && HASHTABLE_STATS != 0
 
 #include <stdio.h>

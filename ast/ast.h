@@ -51,7 +51,7 @@ extern ast_node *make_function(const char *function_name, ast_node *body);
 extern ast_node *make_sequence(ast_node *first, ast_node *second);
 
 extern void optimize_ast(algorithms_map *algs, ast_node *ast, int debug);
-extern void check_ast_code(ast_node *ast);
+extern void check_ast_code(ast_node *ast, algorithms_map *algs);
 extern void write_all_instructions(algorithms_map *algs, ast_node *main_call);
 
 extern void print_ast(const ast_node *ast);

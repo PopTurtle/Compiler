@@ -39,6 +39,9 @@ function all_tests {
     #test if_and_recursive 13
     #test recursion 81
     #test recursion_opt 10
+
+    # fibonacci (10)
+    # mutual recursion
 }
 
 

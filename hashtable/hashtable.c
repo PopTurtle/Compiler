@@ -255,6 +255,21 @@ void hashtable_foreach(const hashtable *ht, void (*callback)(const void *keyref,
   }
 }
 
+void hashtable_extend(hashtable *dest, const hashtable *src) {
+  if (dest == NULL || src == NULL) {
+    return;
+  }
+
+  size_t m = POW2(src->lbnslots);  // Nombre de compartiments (tableau de hachage)
+  for (size_t i = 0; i < m; ++i) {
+    cell *p = src->hasharray[i];
+    while (p != NULL) {
+      hashtable_add(dest, p->keyref, p->valref);
+      p = p->next;  // Passer à l'élément suivant de la liste
+    }
+  }
+}
+
 
 #if defined HASHTABLE_STATS && HASHTABLE_STATS != 0
 

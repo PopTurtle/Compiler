@@ -7,6 +7,8 @@
 #include "hashtable.h"
 #include "utils.h"
 
+#define MAX_PARAMS_COUNT 16
+
 typedef enum {
     SEM_LOCAL,
     SEM_PARAM,
@@ -30,6 +32,7 @@ extern variable_semantic get_variable_semantic(const variable *var);
 extern int get_variable_pos(const variable *var);
 extern value_type unify_variable_type(variable *var, value_type new_type); // Crash si incohérent
 
+extern const char **get_all_param_names(const variables_map *map);
 extern void foreach_variable(variables_map *map, void (*callback)(const char *var_name, variable *var));
 
 #endif

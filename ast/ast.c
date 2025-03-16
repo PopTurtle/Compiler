@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#define MAX_SCOPE_DEPTH 1024
+
 typedef enum {
     // Expressions
     NODE_CONST_INT,
@@ -77,6 +79,14 @@ static int check_type_ignore(value_type current, value_type expected) {
     return 1;
 }
 
+static hashtable *hashtable_empty_cr() {
+    hashtable *res = hashtable_empty((cmpfunc) strcmp, (hashfunc) str_hashfun);
+    if (res == NULL) {
+        ERROR("Could not allocate\n");
+    }
+    return res;
+}
+
 
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
@@ -137,6 +147,8 @@ void unstable_if_unknown(value_type type) {
 }
 
 static value_type get_expr_known_type(ast_node *node, variables_map *vars) {
+    if (node == NULL) { ERROR("Trying to get type of NULL ast node\n"); }
+
     switch (node->type) {
         case NODE_CONST_INT:
             return TYPE_INT;
@@ -383,6 +395,8 @@ static void push_symbol_code(const char *symbol) {
 }
 
 static void write_expression_code(ast_node *expr) {
+    if (expr == NULL) { ERROR("Expression is null\n"); }
+
     switch (expr->type) {
         case NODE_CONST_INT:
         case NODE_CONST_BOOL:
@@ -624,6 +638,8 @@ void write_all_instructions(algorithms_map *algs, ast_node *main_call) {
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
+static const char *check_all_vars_assigned_aux(ast_node *ast, hashtable **assigned, int depth);
+
 static int check_all_path_returns(ast_node *ast) {
     if (ast == NULL) {
         return 0;
@@ -644,15 +660,147 @@ static int check_all_path_returns(ast_node *ast) {
             return check_all_path_returns(ast->do_while.body)
                 || (ast->do_while.condition->type == NODE_CONST_BOOL
                     && ast->do_while.condition->number_value != 0); // Fix temporaire ?
-        default:
+        
+        case NODE_ASSIGNEMENT:
+        case NODE_FUNCTION:
+        case NODE_SPEC_PARAMS_REASSIGN:
             return 0;
+
+        default:
+            ERROR("Unknown statement during return paths checking\n")
     }
 }
 
-void check_ast_code(ast_node *ast) {
+static const char *check_all_vars_assigned_expr(ast_node *expr, hashtable *assigned) {
+    if (expr == NULL) { ERROR("Expression is null (checking)\n"); }
+
+    const char *tmp;
+    switch (expr->type) {
+        case NODE_SYMBOL:
+            if (hashtable_search(assigned, expr->symbol_name) == NULL) {
+                return expr->symbol_name;
+            }
+            return NULL;
+        case NODE_CALL:
+            for (int i = 0; i < expr->call.params_count; ++i) {
+                tmp = check_all_vars_assigned_expr(expr->call.parameters_expr[i], assigned);
+                if (tmp != NULL) return tmp;
+            }
+            return NULL;
+        case NODE_UNARY_OPERATOR:
+            return check_all_vars_assigned_expr(expr->unary_operator.operand, assigned);
+        case NODE_BINARY_OPERATOR:
+            tmp = check_all_vars_assigned_expr(expr->binary_operator.left, assigned);
+            return tmp != NULL ? tmp : check_all_vars_assigned_expr(expr->binary_operator.right, assigned);
+
+        case NODE_CONST_INT:
+        case NODE_CONST_BOOL:
+            return NULL;
+        
+        default:
+            ERROR("Unknown statement during var assignement checking in expr\n");
+    }
+}
+
+static hashtable **cv_add_depth(hashtable **assigned, int current_depth) {
+    assigned[current_depth + 1] = hashtable_empty_cr();
+    hashtable_extend(assigned[current_depth + 1], assigned[current_depth]);
+    return assigned;
+}
+
+static void cv_rm_depth(hashtable **hashtables, int current_depth) {
+    hashtable_dispose(&hashtables[current_depth + 1]);
+}
+
+static const char *cv_if_node(ast_node *ast, hashtable **assigned, int depth) {
+    // si les deux chemins assigne VAR, alors VAR est assignée... à faire ------------------------------------------------------
+    return NULL;
+
+    // faux
+    //const char *tmp = check_all_vars_assigned_expr(ast->if_statement.condition, assigned[depth]);
+    //if (tmp != NULL) return tmp;
+    //tmp = check_all_vars_assigned_aux(ast->if_statement.then_block, cv_add_depth(assigned, depth), depth + 1);
+    //if (tmp == NULL) tmp = check_all_vars_assigned_aux(ast->if_statement.else_block, cv_add_depth(assigned, depth), depth + 1);
+    //cv_rm_depth(assigned, depth);
+    //return tmp;
+}
+
+static const char *check_all_vars_assigned_aux(ast_node *ast, hashtable **assigned, int depth) {
+    if (ast == NULL) return NULL;
+
+    const char *tmp;
+    switch (ast->type) {
+        case NODE_ASSIGNEMENT:
+            tmp = check_all_vars_assigned_expr(ast->assignement.expr, assigned[depth]);
+            if (tmp != NULL) return tmp;
+            hashtable_add(assigned[depth], ast->assignement.var_name, ast->assignement.expr);
+            return NULL;
+
+        case NODE_SEQUENCE:
+            tmp = check_all_vars_assigned_aux(ast->sequence.first, assigned, depth);
+            return tmp != NULL ? tmp : check_all_vars_assigned_aux(ast->sequence.second, assigned, depth);
+
+        case NODE_RETURN:
+            return check_all_vars_assigned_expr(ast->inst_return.expr, assigned[depth]);
+
+        case NODE_IF_STATEMENT:
+            return cv_if_node(ast, assigned, depth);
+
+        case NODE_DO_FOR_I:
+            tmp = check_all_vars_assigned_expr(ast->do_for_i.start_expr, assigned[depth]);
+            if (tmp == NULL) tmp = check_all_vars_assigned_expr(ast->do_for_i.end_expr, assigned[depth]);
+            if (tmp != NULL) return tmp;
+            cv_add_depth(assigned, depth);
+            hashtable_add(assigned[depth + 1], ast->do_for_i.var_name, ast->do_for_i.start_expr);
+            tmp = check_all_vars_assigned_aux(ast->do_for_i.body, assigned, depth + 1);
+            cv_rm_depth(assigned, depth);
+            return tmp;
+
+        case NODE_DO_WHILE:
+            tmp = check_all_vars_assigned_expr(ast->do_while.condition, assigned[depth]);
+            if (tmp != NULL) return tmp;
+            tmp = check_all_vars_assigned_aux(ast->do_while.body, cv_add_depth(assigned, depth), depth + 1);
+            cv_rm_depth(assigned, depth);
+            return tmp;
+        
+        case NODE_SPEC_PARAMS_REASSIGN:
+            for (int i = 0; i < ast->spec_params_reassign.params_count; ++i) {
+                tmp = check_all_vars_assigned_expr(ast->spec_params_reassign.parameters_expr[i], assigned[depth]);
+                if (tmp != NULL) return tmp;
+            }
+            return NULL;
+
+        default:
+            ERROR("Unknown statement during var assignement checking\n");
+    }
+}
+
+static const char *check_all_vars_assigned(ast_node *ast, algorithms_map *algs) {
+    hashtable **assigned = malloc(MAX_SCOPE_DEPTH * sizeof *assigned);
+    assigned[0] = hashtable_empty_cr();
+
+    // Ajoute les parametres comme étant définis par défaut
+    algorithm *current = get_algorithm(algs, ast->function.function_name);
+    const char **pnames = get_all_param_names(get_alg_variables(current));
+    for (int i = 0; pnames[i] != NULL; ++i) {
+        hashtable_add(assigned[0], pnames[i], pnames[i]);
+    }
+
+    const char *result = check_all_vars_assigned_aux(ast->function.body, assigned, 0);
+    hashtable_dispose(&assigned[0]);
+    free(assigned);
+    return result;
+}
+
+void check_ast_code(ast_node *ast, algorithms_map *algs) {
     if (ast->type != NODE_FUNCTION) { ERROR("The AST to verfify is not a function"); }
     if (!check_all_path_returns(ast->function.body)) {
-        ERRORF("Some paths do not return any value in function %s\n", ast->function.function_name);
+        ERRORF("Some paths do not return any value in function '%s'\n", ast->function.function_name);
+    }
+
+    const char *not_assigned_symbol = check_all_vars_assigned(ast, algs);
+    if (not_assigned_symbol != NULL) {
+        ERRORF("Symbol '%s' might be used before being assigned in function '%s'\n", not_assigned_symbol, ast->function.function_name);
     }
 }
 

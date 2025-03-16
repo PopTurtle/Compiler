@@ -11,6 +11,8 @@ struct variables_map {
     hashtable *map;
     int params_count;
     int locals_count;
+
+    const char **param_names;
 };
 
 int params_count(const variables_map *map) {
@@ -29,6 +31,8 @@ variables_map *create_variables_map() {
     }
     r->params_count = 0;
     r->locals_count = 0;
+    r->param_names = cralloc((MAX_PARAMS_COUNT + 1) * sizeof *(r->param_names));
+    r->param_names[0] = NULL;
     return r;
 }
 
@@ -51,6 +55,10 @@ static variable *create_var(variables_map *map, const char *var_name, value_type
 }
 
 variable *create_local(variables_map *map, const char *var_name) {
+    if (hashtable_search(map->map, var_name) != NULL) {
+        ERRORF("Cannot create local, var name '%s' is already used\n", var_name);
+    }
+
     variable *var = create_var(map, var_name, TYPE_UNKNOWN);
     var->semantic = SEM_LOCAL;
     var->position = map->locals_count++;
@@ -58,9 +66,22 @@ variable *create_local(variables_map *map, const char *var_name) {
 }
 
 variable *create_parameter(variables_map *map, const char *var_name) {
+    if (hashtable_search(map->map, var_name) != NULL) {
+        ERRORF("Cannot create parameter, var name '%s' is already used\n", var_name);
+    }
+
+    if (map->params_count == MAX_PARAMS_COUNT) {
+        ERROR("Exceeded maximum parameters count\n");
+    }
+
     variable *var = create_var(map, var_name, TYPE_INT);
     var->semantic = SEM_PARAM;
     var->position = map->params_count++;
+    
+    const char *pname = mstrcpy(var_name);
+    map->param_names[map->params_count - 1] = pname;
+    map->param_names[map->params_count] = NULL;
+
     return var;
 }
 
@@ -91,6 +112,10 @@ value_type unify_variable_type(variable *var, value_type new_type) {
         ERRORF("Variable '%s' is used as a %s but is of type %s\n", var->name, value_type_to_string(new_type), value_type_to_string(var->type));
     }
     return new_type;
+}
+
+const char **get_all_param_names(const variables_map *map) {
+    return map->param_names;
 }
 
 void foreach_variable(variables_map *map, void (*callback)(const char *var_name, variable *var)) {
