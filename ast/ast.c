@@ -938,6 +938,8 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
             break;
         
         case NODE_IF_STATEMENT:
+            optimize_dead_blocks(&(ast->if_statement.then_block));
+            optimize_dead_blocks(&(ast->if_statement.else_block));
             // Supprime les ifs dont les conditions sont constantes
             if (IS_BOOL_CONST(ast->if_statement.condition)) {
                 OC(); O_DEBUG("If statement reduction, condition was bool constant");
@@ -958,6 +960,7 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
             break;
 
         case NODE_DO_FOR_I:
+            optimize_dead_blocks(&(ast->do_for_i.body));
             if (IS_INT_CONST(ast->do_for_i.start_expr) && IS_INT_CONST(ast->do_for_i.end_expr)) {
                 if (ast->do_for_i.start_expr->number_value > ast->do_for_i.end_expr->number_value) {
                     // La boucle ne fera aucun tour
@@ -968,6 +971,7 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
             break;
 
         case NODE_DO_WHILE:
+            optimize_dead_blocks(&(ast->do_while.body));
             if (IS_BOOL_CONST(ast->do_while.condition) && ast->do_while.condition->number_value == 0) {
                 // La boucle ne fera aucun tour
                 OC(); O_DEBUG("While statement reduction, no iterations");
@@ -979,23 +983,43 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
     }
 }
 
-static ast_node **get_last_return(ast_node **ast_ptr) { // est-ce qu'on a bien le last return ? ------------------------------------------------------------------------------
-    ast_node *ast = *ast_ptr; // ajouter le support pour if A else return ---------------------------------------------------------------------------------------------
-    switch (ast->type) {
-        case NODE_RETURN: return ast_ptr;
-        case NODE_FUNCTION: return get_last_return(&(ast->function.body));
-        case NODE_SEQUENCE: return get_last_return(&(ast->sequence.second));
-        
-        default:
-            return NULL;
-    }
-}
 static int is_recursive_return(const char *alg_name, ast_node *return_s) {
     if (return_s->inst_return.expr->type == NODE_CALL
         && strcmp(alg_name, return_s->inst_return.expr->call.function_name) == 0) {
             return 1;
     }
     return 0;
+}
+
+static ast_node **keep_recursive_return(const char *alg_name, ast_node **return_s_ptr) {
+    if (return_s_ptr == NULL || !is_recursive_return(alg_name, *return_s_ptr)) {
+        return NULL;
+    }
+    return return_s_ptr;
+}
+
+static ast_node **get_last_recursive_return(ast_node **ast_ptr, const char *alg_name) {
+    ast_node *ast = *ast_ptr;
+    ast_node **res_tmp;
+    switch (ast->type) {
+        case NODE_FUNCTION:
+            return keep_recursive_return(alg_name, get_last_recursive_return(&(ast->function.body), alg_name));
+        
+        case NODE_SEQUENCE:
+            return keep_recursive_return(alg_name, get_last_recursive_return(&(ast->sequence.second), alg_name));
+
+        
+        case NODE_RETURN:
+            return keep_recursive_return(alg_name, ast_ptr);
+
+        case NODE_IF_STATEMENT:
+            res_tmp = keep_recursive_return(alg_name, get_last_recursive_return(&(ast->if_statement.then_block), alg_name));
+            if (res_tmp != NULL) return res_tmp;
+            return keep_recursive_return(alg_name, get_last_recursive_return(&(ast->if_statement.else_block), alg_name));
+
+        default:
+            return NULL;
+    }
 }
 
 static void optimize_tail_call_rebuild_func(ast_node *func, ast_node *body, ast_node *return_s) {
@@ -1013,7 +1037,7 @@ static void optimize_tail_call_recursion(algorithm *alg, ast_node *ast) {
     if (ast == NULL || ast->type != NODE_FUNCTION) return;
 
     // Récupère le dernier return et vérifie qu'il s'agit d'un appel récursif
-    ast_node **return_s_ptr = get_last_return(&ast);
+    ast_node **return_s_ptr = get_last_recursive_return(&ast, get_alg_name(alg));
     if (return_s_ptr == NULL || !is_recursive_return(get_alg_name(alg), *return_s_ptr)) {
         return;
     }
