@@ -1103,17 +1103,29 @@ static struct derecursification_information *optimize_make_drec_infos(const char
             return ret;
 
         case NODE_IF_STATEMENT:
-            ast_node **last_inst = get_last_instruction(&(ast->if_statement.else_block));
-            if (!is_recursive_return(alg_name, *last_inst)) return NULL;
             ret = cralloc(sizeof *ret);
-            ret->dr_type = DR_IF_ELSE;
-            ret->dr_if_else.condition = ast->if_statement.condition;
-            ret->dr_if_else.rec_call_body = &(ast->if_statement.else_block);
-            ret->dr_if_else.terminate = ast->if_statement.then_block;
-            ret->dr_if_else.if_ptr = ast_ptr;
-            ret->dr_if_else.return_s_ptr = last_inst;
-            return ret;
-
+            ast_node **last_inst = get_last_instruction(&(ast->if_statement.else_block));
+            if (is_recursive_return(alg_name, *last_inst)) {
+                ret->dr_type = DR_IF_ELSE;
+                ret->dr_if_else.condition = ast->if_statement.condition;
+                ret->dr_if_else.rec_call_body = &(ast->if_statement.else_block);
+                ret->dr_if_else.terminate = ast->if_statement.then_block;
+                ret->dr_if_else.if_ptr = ast_ptr;
+                ret->dr_if_else.return_s_ptr = last_inst;
+                return ret;
+            }
+            last_inst = get_last_instruction(&(ast->if_statement.then_block));
+            if (is_recursive_return(alg_name, *last_inst)) {
+                ret->dr_type = DR_IF_ELSE;
+                ret->dr_if_else.condition = make_unary_operator(OP_NOT, ast->if_statement.condition);
+                ret->dr_if_else.rec_call_body = &(ast->if_statement.then_block);
+                ret->dr_if_else.terminate = ast->if_statement.else_block;
+                ret->dr_if_else.if_ptr = ast_ptr;
+                ret->dr_if_else.return_s_ptr = last_inst;
+                return ret;
+            }
+            free(ret);
+            return NULL;
         default:
             return NULL;
     }
@@ -1130,6 +1142,7 @@ static void optimize_tail_call_recursion(algorithm *alg, ast_node *ast) {
     }
 
     optimize_tail_call_rebuild_func(infos);
+    free(infos);
 
     OC();
     O_DEBUGF("Tail call recursion removed for function %s", get_alg_name(alg));

@@ -89,9 +89,9 @@ int main(int argc, char *argv[]) {
     make_function(get_alg_name(alg1),
         //make_sequence(
             make_if_statement(
-                make_binary_operator(make_symbol("b"), OP_EQUAL, make_int(0)),
-                make_return(make_symbol("acc")),
-                make_return(make_call("Puissance", params1, 3))
+                make_binary_operator(make_symbol("b"), OP_SGT, make_int(0)),
+                make_return(make_call("Puissance", params1, 3)),
+                make_return(make_symbol("acc"))
             )
         //)
     );
