@@ -404,6 +404,9 @@ static void write_expression_code(ast_node *expr) {
             PUSH(R1);
             break;
         case NODE_SYMBOL:
+            if (g_wcurrent == NULL) {
+                ERRORF("Tried to access symbol outside of any algorithm: '%s'\n", expr->symbol_name);
+            }
             push_symbol_code(expr->symbol_name);
             break;
         case NODE_UNARY_OPERATOR:
@@ -601,7 +604,7 @@ static void write_end_code(ast_node *main_call) {
     // Appel de la fonction "main"
     C("Appel principal");
     if (main_call == NULL || main_call->type != NODE_CALL) {
-        ERROR("There is no main call");
+        ERROR("There is no main call\n");
     }
     write_call_function_code(main_call);
 
@@ -622,8 +625,10 @@ void write_all_instructions(algorithms_map *algs, ast_node *main_call) {
     g_writing = 1;
 
     g_walgs = algs;
+    g_wcurrent = NULL;
     write_start_code();
     foreach_algorithm(algs, write_instructions_pre);
+    g_wcurrent = NULL;
     write_end_code(main_call);
 
     g_writing = 0;
