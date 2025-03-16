@@ -87,11 +87,13 @@ int main(int argc, char *argv[]) {
     ast_node *params1[] = { make_symbol("a"), make_binary_operator(make_symbol("b"), OP_SUB, make_int(1)), make_binary_operator(make_symbol("acc"), OP_MUL, make_symbol("a")) };
     ast_node *node1 = 
     make_function(get_alg_name(alg1),
-        make_if_statement(
-            make_binary_operator(make_symbol("b"), OP_EQUAL, make_int(0)),
-            make_return(make_symbol("acc")),
-            make_return(make_call("Puissance", params1, 3))
-        )
+        //make_sequence(
+            make_if_statement(
+                make_binary_operator(make_symbol("b"), OP_EQUAL, make_int(0)),
+                make_return(make_symbol("acc")),
+                make_return(make_call("Puissance", params1, 3))
+            )
+        //)
     );
     
     // Arbre de l'algorithme Algo2

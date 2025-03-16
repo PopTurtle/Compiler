@@ -532,9 +532,9 @@ static void write_instructions(ast_node *ast) {
             TAGC("start_while_loop", do_while_count);
 
             // Evaluer la condition, jmp à la fin si !condition
+            write_expression_code(ast->do_while.condition);
             TAGCN("end_while_loop", do_while_count, sbf);
             CONSTSTR(R3, sbf);
-            write_expression_code(ast->do_while.condition);
             POP(R1);
             CONSTINT(R2, 0);
             CMP(R1, R2);
@@ -934,6 +934,13 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
                 *ast_ptr = NULL;
                 break;
             }
+            ast_node *rplc_inst = NULL;
+            if (ast->sequence.first == NULL) rplc_inst = ast->sequence.second;
+            if (ast->sequence.second == NULL) rplc_inst = ast->sequence.first;
+            if (rplc_inst != NULL) {
+                *ast_ptr = rplc_inst;
+                OC(); O_DEBUG("Removed half empty sequence");
+            }
             break;
         
         case NODE_IF_STATEMENT:
@@ -982,7 +989,66 @@ static void optimize_dead_blocks(ast_node **ast_ptr) {
     }
 }
 
+struct derecursification_information {
+    enum { DR_END, DR_IF_ELSE } dr_type;
+    ast_node *func;
+    union {
+        struct { ast_node **return_s_ptr; } dr_end;
+        struct {
+            ast_node *condition;
+            ast_node *terminate;
+            ast_node **rec_call_body;
+            ast_node **if_ptr;
+            ast_node **return_s_ptr;
+        } dr_if_else;
+    };
+};
+
+static void optimize_tail_call_rebuild_func(const struct derecursification_information *infos) {
+    ast_node *calln;
+    switch (infos->dr_type) {
+        case DR_END:
+            calln = (*infos->dr_end.return_s_ptr)->inst_return.expr;
+            *infos->dr_end.return_s_ptr = NULL;
+            infos->func->function.body = make_do_while(
+                make_bool(1),
+                make_sequence(
+                    infos->func->function.body,
+                    make_spec_params_reassign(calln->call.parameters_expr, calln->call.params_count)
+                )
+            );
+            break;
+        
+        case DR_IF_ELSE:
+            calln = (*infos->dr_if_else.return_s_ptr)->inst_return.expr;
+            *infos->dr_if_else.return_s_ptr = NULL;
+            *infos->dr_if_else.if_ptr = NULL;
+            ast_node *start_body = infos->func->function.body;
+            infos->func->function.body = make_sequence(
+                start_body,
+                make_sequence(   
+                    make_do_while(
+                        make_unary_operator(OP_NOT, infos->dr_if_else.condition),
+                        make_sequence(
+                            make_sequence(
+                                *infos->dr_if_else.rec_call_body,
+                                make_spec_params_reassign(calln->call.parameters_expr, calln->call.params_count)
+                            ),
+                            start_body
+                        )
+                    ),
+                    infos->dr_if_else.terminate
+                )
+            );
+            break;
+
+        default:
+            ERROR("Derecursification informations are invalid\n");
+    }
+}
+
 static int is_recursive_return(const char *alg_name, ast_node *return_s) {
+    if (return_s->type != NODE_RETURN) return 0;
     if (return_s->inst_return.expr->type == NODE_CALL
         && strcmp(alg_name, return_s->inst_return.expr->call.function_name) == 0) {
             return 1;
@@ -990,64 +1056,80 @@ static int is_recursive_return(const char *alg_name, ast_node *return_s) {
     return 0;
 }
 
-static ast_node **keep_recursive_return(const char *alg_name, ast_node **return_s_ptr) {
-    if (return_s_ptr == NULL || !is_recursive_return(alg_name, *return_s_ptr)) {
-        return NULL;
+static ast_node **get_last_instruction(ast_node **ast_ptr) {
+    ast_node *ast = *ast_ptr;
+    
+    if (ast == NULL) return NULL;
+
+    switch (ast->type) {
+        case NODE_SEQUENCE:
+            ast_node **snd = get_last_instruction(&(ast->sequence.second));
+            if (snd != NULL) return snd;
+            return get_last_instruction(&(ast->sequence.first));
+
+        default:
+            return ast_ptr;
     }
-    return return_s_ptr;
 }
 
-static ast_node **get_last_recursive_return(ast_node **ast_ptr, const char *alg_name) {
+// Au premier appel, (*ast_ptr)->type == NODE_FUNCTION
+static struct derecursification_information *optimize_make_drec_infos(const char *alg_name, ast_node **ast_ptr) {
     ast_node *ast = *ast_ptr;
-    ast_node **res_tmp;
+    struct derecursification_information *ret;
+
+    if (ast == NULL) {
+        return NULL;
+    }
+
     switch (ast->type) {
         case NODE_FUNCTION:
-            return keep_recursive_return(alg_name, get_last_recursive_return(&(ast->function.body), alg_name));
+            struct derecursification_information *result = optimize_make_drec_infos(alg_name, &(ast->function.body));
+            if (result == NULL) {
+                return NULL;
+            }
+            result->func = ast;
+            return result;
         
         case NODE_SEQUENCE:
-            return keep_recursive_return(alg_name, get_last_recursive_return(&(ast->sequence.second), alg_name));
-
+            return (ast->sequence.second == NULL) ?
+                optimize_make_drec_infos(alg_name, &(ast->sequence.first)) :
+                optimize_make_drec_infos(alg_name, &(ast->sequence.second));
         
         case NODE_RETURN:
-            return keep_recursive_return(alg_name, ast_ptr);
+            if (!is_recursive_return(alg_name, ast)) return NULL;
+            ret = cralloc(sizeof *ret);
+            ret->dr_type = DR_END;
+            ret->dr_end.return_s_ptr = ast_ptr;
+            return ret;
 
         case NODE_IF_STATEMENT:
-            res_tmp = keep_recursive_return(alg_name, get_last_recursive_return(&(ast->if_statement.then_block), alg_name));
-            if (res_tmp != NULL) return res_tmp;
-            return keep_recursive_return(alg_name, get_last_recursive_return(&(ast->if_statement.else_block), alg_name));
+            ast_node **last_inst = get_last_instruction(&(ast->if_statement.else_block));
+            if (!is_recursive_return(alg_name, *last_inst)) return NULL;
+            ret = cralloc(sizeof *ret);
+            ret->dr_type = DR_IF_ELSE;
+            ret->dr_if_else.condition = ast->if_statement.condition;
+            ret->dr_if_else.rec_call_body = &(ast->if_statement.else_block);
+            ret->dr_if_else.terminate = ast->if_statement.then_block;
+            ret->dr_if_else.if_ptr = ast_ptr;
+            ret->dr_if_else.return_s_ptr = last_inst;
+            return ret;
 
         default:
             return NULL;
     }
 }
 
-static void optimize_tail_call_rebuild_func(ast_node *func, ast_node *body, ast_node *return_s) {
-    ast_node *calln = return_s->inst_return.expr;
-    func->function.body = make_do_while(
-        make_bool(1),
-        make_sequence(
-            body,
-            make_spec_params_reassign(calln->call.parameters_expr, calln->call.params_count)
-        )
-    );
-}
-
 static void optimize_tail_call_recursion(algorithm *alg, ast_node *ast) {
     if (ast == NULL || ast->type != NODE_FUNCTION) return;
 
-    // Récupère le dernier return et vérifie qu'il s'agit d'un appel récursif
-    ast_node **return_s_ptr = get_last_recursive_return(&ast, get_alg_name(alg));
-    if (return_s_ptr == NULL || !is_recursive_return(get_alg_name(alg), *return_s_ptr)) {
+    struct derecursification_information *infos =
+        optimize_make_drec_infos(get_alg_name(alg), &ast);
+
+    if (infos == NULL) {
         return;
     }
 
-    // On récupère le corps et le return de la fonction
-    ast_node *body = ast->function.body;
-    ast_node *return_s = *return_s_ptr;
-    *return_s_ptr = NULL;
-
-    // Reconstruis l'arbre de la fonction
-    optimize_tail_call_rebuild_func(ast, body, return_s);
+    optimize_tail_call_rebuild_func(infos);
 
     OC();
     O_DEBUGF("Tail call recursion removed for function %s", get_alg_name(alg));

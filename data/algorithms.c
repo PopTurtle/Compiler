@@ -1,7 +1,7 @@
 #include "algorithms.h"
 
 
-#define PRINT_LINE_LEN 75
+#define PRINT_LINE_LEN 80
 #define PRINT_START " Debut "
 #define PRINT_END " Fin "
 
