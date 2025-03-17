@@ -3,15 +3,14 @@
 
 #include <string.h>
 
-#include "value_type.h"
-#include "hashtable.h"
-#include "utils.h"
-
 typedef struct algorithm algorithm;
 typedef struct algorithms_map algorithms_map;
 
+#include "value_type.h"
+#include "hashtable.h"
 #include "ast.h"
 #include "variables.h"
+#include "utils.h"
 
 extern algorithms_map *create_algorithms_map();
 extern algorithm *get_algorithm(const algorithms_map *map, const char *alg_name);

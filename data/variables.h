@@ -3,10 +3,6 @@
 
 #include <string.h>
 
-#include "value_type.h"
-#include "hashtable.h"
-#include "utils.h"
-
 #define MAX_PARAMS_COUNT 16
 
 typedef enum {
@@ -17,12 +13,16 @@ typedef enum {
 typedef struct variable variable;
 typedef struct variables_map variables_map;
 
+#include "value_type.h"
+#include "hashtable.h"
+#include "utils.h"
 
 extern int params_count(const variables_map *map);
 extern int locals_count(const variables_map *map);
 
 extern variables_map *create_variables_map();
 extern variable *get_variable(const variables_map *map, const char *var_name);
+extern int variable_exists(const variables_map *map, const char *var_name);
 extern variable *create_local(variables_map *map, const char *var_name);
 extern variable *create_parameter(variables_map *map, const char *var_name);
 

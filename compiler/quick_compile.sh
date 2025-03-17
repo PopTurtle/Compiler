@@ -1,4 +1,5 @@
-./compiler > test.asipro
+*
+./parsing < test_code.algosipro > test.asipro
 asipro test.asipro test.sipro
 
 echo ""

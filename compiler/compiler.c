@@ -1,6 +1,4 @@
-#include "ast.h"
-#include "algorithms.h"
-#include "variables.h"
+#include "compiler.h"
 
 #define ARG_NONE 0
 #define ARG_HELP 1
@@ -13,24 +11,24 @@
 #define ARG_NO_CODE_STR "-c"
 #define ARG_NO_OPTIMIZATION_STR "-o"
 
-void print_help_and_exit();
-void analyze_arg(const char *argstr);
-void print_alg(const char *alg_name, algorithm *alg);
+static void print_help_and_exit();
+static void analyze_arg(const char *argstr);
+static void print_alg(const char *alg_name, algorithm *alg);
 
-void optimize_alg(const char *alg_name, algorithm *alg);
-void check_code(const char *alg_name, algorithm *alg);
+static void optimize_alg(const char *alg_name, algorithm *alg);
+static void check_code(const char *alg_name, algorithm *alg);
 
-void debug_print_part(algorithms_map *algs, int should_print_part_title, const char *part_title);
+static void debug_print_part(algorithms_map *algs, int should_print_part_title, const char *part_title);
 
 static int g_debug = 0;
 static int g_no_code = 0;
 static int g_no_optimization = 0;
 
-const char *g_exec_name;
+static const char *g_exec_name;
 
-algorithms_map *g_algs_map;
+static algorithms_map *g_algs_map;
 
-int main(int argc, char *argv[]) {
+int compile_code(int argc, char *argv[], algorithms_map *algs_map, ast_node *first_call) {
     g_exec_name = argv[0];
     for (int i = 1; i < argc; ++i) {
         analyze_arg(argv[i]);
@@ -72,42 +70,42 @@ int main(int argc, char *argv[]) {
 
 
     // ALGO PUISSANCE REC
-    algorithms_map *algs_map = create_algorithms_map();
-    algorithm *alg1 = create_algorithm(algs_map, "Puissance");
-    variables_map *algv1 = get_alg_variables(alg1);
-    algorithm *alg2 = create_algorithm(algs_map, "Algo2");
-    variables_map *algv2 = get_alg_variables(alg2);
-    
-    // VARS
-    create_parameter(algv1, "a");
-    create_parameter(algv1, "b");
-    create_parameter(algv1, "acc");
-
-    // Arbre de l'algorithme Puissance
-    ast_node *params1[] = { make_symbol("a"), make_binary_operator(make_symbol("b"), OP_SUB, make_int(1)), make_binary_operator(make_symbol("acc"), OP_MUL, make_symbol("a")) };
-    ast_node *node1 = 
-    make_function(get_alg_name(alg1),
-        //make_sequence(
-            make_if_statement(
-                make_binary_operator(make_symbol("b"), OP_SGT, make_int(0)),
-                make_return(make_call("Puissance", params1, 3)),
-                make_return(make_symbol("acc"))
-            )
-        //)
-    );
-    
-    // Arbre de l'algorithme Algo2
-    ast_node *params2[] = { make_int(4), make_int(5), make_int(1) };
-    
-    ast_node *node2 = 
-    make_function(get_alg_name(alg2),
-        make_return(make_call("Puissance", params2, 3))
-    );
-    
-    // Association
-    associate_tree(alg1, node1);
-    associate_tree(alg2, node2);
-
+//    algorithms_map *algs_map = create_algorithms_map();
+//    algorithm *alg1 = create_algorithm(algs_map, "Puissance");
+//    variables_map *algv1 = get_alg_variables(alg1);
+//    algorithm *alg2 = create_algorithm(algs_map, "Algo2");
+//    variables_map *algv2 = get_alg_variables(alg2);
+//    
+//    // VARS
+//    create_parameter(algv1, "a");
+//    create_parameter(algv1, "b");
+//    create_parameter(algv1, "acc");
+//
+//    // Arbre de l'algorithme Puissance
+//    ast_node *params1[] = { make_symbol("a"), make_binary_operator(make_symbol("b"), OP_SUB, make_int(1)), make_binary_operator(make_symbol("acc"), OP_MUL, make_symbol("a")) };
+//    ast_node *node1 = 
+//    make_function(get_alg_name(alg1),
+//        //make_sequence(
+//            make_if_statement(
+//                make_binary_operator(make_symbol("b"), OP_SGT, make_int(0)),
+//                make_return(make_call("Puissance", params1, 3)),
+//                make_return(make_symbol("acc"))
+//            )
+//        //)
+//    );
+//    
+//    // Arbre de l'algorithme Algo2
+//    ast_node *params2[] = { make_int(4), make_int(5), make_int(1) };
+//    
+//    ast_node *node2 = 
+//    make_function(get_alg_name(alg2),
+//        make_return(make_call("Puissance", params2, 3))
+//    );
+//    
+//    // Association
+//    associate_tree(alg1, node1);
+//    associate_tree(alg2, node2);
+//
     // -------------------------------------------------------------------------
     
     g_algs_map = algs_map;
@@ -125,7 +123,8 @@ int main(int argc, char *argv[]) {
 
     debug_print_part(algs_map, !g_no_code, "Output code");
     if (!g_no_code) {
-        write_all_instructions(algs_map, make_call("Algo2", NULL, 0));
+        ast_node *params[] = { make_int(3) };
+        write_all_instructions(algs_map, first_call);
     }
 
     return 0;

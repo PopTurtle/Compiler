@@ -2,7 +2,6 @@
 #define AST__H
 
 #include "value_type.h"
-#include "utils.h"
 #include "instructions.h"
 
 typedef enum {
@@ -27,6 +26,7 @@ typedef enum {
 
 typedef struct ast_node ast_node;
 
+#include "utils.h"
 #include "algorithms.h"
 
 extern void resolve_types(algorithms_map *algs);

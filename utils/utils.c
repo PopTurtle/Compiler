@@ -22,3 +22,20 @@ char *mstrcpy(const char *src) {
     strcpy(res, src);
     return res;
 }
+
+const char *b_op_to_str(binary_operator_t operator) {
+    switch (operator) {
+        case OP_ADD: return "+";
+        case OP_SUB: return "-";
+        case OP_MUL: return "*";
+        case OP_DIV: return "/";
+        case OP_AND: return "&&";
+        case OP_OR: return "||";
+        case OP_EQUAL: return "==";
+        case OP_SGT: return ">";
+        case OP_EGT: return ">=";
+        case OP_SLT: return "<";
+        case OP_ELT: return "<=";
+        default: return "Unknwon operator";
+    }
+}

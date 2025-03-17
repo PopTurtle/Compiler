@@ -1,7 +1,7 @@
 \begin{algo}{recursive_pow}{a, b, acc}
     \IF{b == 0}
         \RETURN{acc}
-    \ENDIF
+    \FI
     \RETURN{\CALL{recursive_pow}{a, b - 1, acc * a}}
 \end{algo}
 

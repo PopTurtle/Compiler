@@ -44,13 +44,18 @@ variable *get_variable(const variables_map *map, const char *var_name) {
     return var;
 }
 
+int variable_exists(const variables_map *map, const char *var_name) {
+    variable *var = hashtable_search(map->map, var_name);
+    return var != NULL;
+}
+
 static variable *create_var(variables_map *map, const char *var_name, value_type var_type) {
     variable *var = cralloc(sizeof *var);
     var->name = cralloc(strlen(var_name) + 1);
     strcpy(var->name, var_name);
     var->type = var_type;
-    
-    hashtable_add(map->map, var_name, var);
+
+    hashtable_add(map->map, var->name, var);
     return var;
 }
 

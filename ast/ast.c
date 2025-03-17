@@ -95,9 +95,9 @@ static hashtable *hashtable_empty_cr() {
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
-int g_resolving = 0;        // Résolution en cours ?
-int g_stable;               // Résolution en cours est stable ?
-algorithms_map *g_algs;     // Algorithmes de la résolution en cours
+static int g_resolving = 0;        // Résolution en cours ?
+static int g_stable;               // Résolution en cours est stable ?
+static algorithms_map *g_algs;     // Algorithmes de la résolution en cours
 
 
 static void unstable_if_unknown(value_type type);
@@ -306,11 +306,11 @@ static int check_binary_operation_type(ast_node *op, variables_map *vars, value_
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
-int g_writing = 0;
-char *sbf;
+static int g_writing = 0;
+static char *sbf;
 
-algorithms_map *g_walgs;
-algorithm *g_wcurrent;
+static algorithms_map *g_walgs;
+static algorithm *g_wcurrent;
 
 static void write_expression_code(ast_node *expr);
 
@@ -797,7 +797,7 @@ static const char *check_all_vars_assigned(ast_node *ast, algorithms_map *algs) 
 }
 
 void check_ast_code(ast_node *ast, algorithms_map *algs) {
-    if (ast->type != NODE_FUNCTION) { ERROR("The AST to verfify is not a function"); }
+    if (ast->type != NODE_FUNCTION) { ERROR("The AST to verfify is not a function\n"); }
     if (!check_all_path_returns(ast->function.body)) {
         ERRORF("Some paths do not return any value in function '%s'\n", ast->function.function_name);
     }
@@ -816,8 +816,8 @@ void check_ast_code(ast_node *ast, algorithms_map *algs) {
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
-int g_odebug = 0;
-int g_ochanged;
+static int g_odebug = 0;
+static int g_ochanged;
 
 #define O_DEBUGF(fmt, ...) if (g_odebug) { printf("-> " fmt "\n", __VA_ARGS__); }
 #define O_DEBUG(str) O_DEBUGF("%s", str);
@@ -1155,7 +1155,7 @@ static void optimize_tail_call_recursion(algorithm *alg, ast_node *ast) {
 
 void optimize_ast(algorithms_map *algs, ast_node *ast, int debug) {
     if (ast->type != NODE_FUNCTION) {
-        ERROR("Cannot optimize a non function AST");
+        ERROR("Cannot optimize a non function AST\n");
     }
 
     g_odebug = debug;
@@ -1342,7 +1342,7 @@ static void print_ast_aux(const ast_node *ast, int depth) {
             print_ast_aux(ast->unary_operator.operand, D);
             break;
         case NODE_BINARY_OPERATOR:
-            printf("%sExpression, OP: %d, result in %s\n", prefix, ast->binary_operator.operator, value_type_to_string(ast->binary_operator.result_type));
+            printf("%sExpression, OP: %s, result in %s\n", prefix, b_op_to_str(ast->binary_operator.operator), value_type_to_string(ast->binary_operator.result_type));
             print_ast_aux(ast->binary_operator.left, D);
             print_ast_aux(ast->binary_operator.right, D);
             break;
@@ -1378,7 +1378,7 @@ static void print_ast_aux(const ast_node *ast, int depth) {
             print_ast_aux(ast->do_while.body, D);
             break;
         case NODE_FUNCTION:
-            printf("%sFonction %s\n", prefix, ast->function.function_name);
+            printf("%sFonction '%s'\n", prefix, ast->function.function_name);
             print_ast_aux(ast->function.body, D);
             break;
         case NODE_SEQUENCE:

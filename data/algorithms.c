@@ -30,7 +30,7 @@ algorithms_map *create_algorithms_map() {
 algorithm *get_algorithm(const algorithms_map *map, const char *alg_name) {
     algorithm *alg = hashtable_search(map->map, alg_name);
     if (alg == NULL) {
-        ERRORF("Algorithm '%s' does not exist", alg_name);
+        ERRORF("Algorithm '%s' does not exist\n", alg_name);
     }
     return alg;
 }
@@ -43,7 +43,7 @@ algorithm *create_algorithm(algorithms_map *map, const char *name) {
     alg->return_type = TYPE_UNKNOWN;
     alg->associated_ast = NULL;
 
-    hashtable_add(map->map, name, alg);
+    hashtable_add(map->map, alg->name, alg);
     return alg;
 }
 
@@ -103,6 +103,8 @@ void print_algorithm(const algorithm *alg) {
     for (size_t i = PRINT_LINE_LEN / 2; i < PRINT_LINE_LEN && i < PRINT_LINE_LEN / 2 + strlen(start); ++i) {
         buff[i] = start[i - PRINT_LINE_LEN / 2];
     }
+
+    buff[PRINT_LINE_LEN] = '\0';    
 
     printf("%s\n", buff);
     
