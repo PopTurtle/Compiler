@@ -23,14 +23,14 @@ function test_cmd {
 }
 
 # compile [file_path] : Compile le fichier algo au chemin [file_path] en fichier
-# asipro et sipro (chemins: compiled_asipro_path et compiled_sipro_path)
+# asipro et sipro (chemins: $compiled_asipro_path et $compiled_sipro_path)
 function compile {
     $compiler_path < $1 > $compiled_asipro_path
     asipro $compiled_asipro_path $compiled_sipro_path 2> /dev/null
 }
 
 #  test [file_name] [expected_result] : compile et execute le fichier
-#    se trouvant au chemin ./codes/[file_name].algo, et vérifie que le résultat
+#    se trouvant au chemin $codes_dir[file_name].algo, et vérifie que le résultat
 #    renvoyé par l'execution est [expected_result].
 function test {
     echo "Compiling $1.algo"
@@ -54,7 +54,7 @@ function all_tests {
 }
 
 
-all_tests;
+all_tests
 rm $compiled_asipro_path
 rm $compiled_sipro_path
 rm gmon.out
