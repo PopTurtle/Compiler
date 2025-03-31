@@ -79,6 +79,11 @@ extern void hashtable_foreach(const hashtable *ht, void (*callback)(const void *
 //  hashtable_cpy : copie tous les couples clé valeurs de la table src dans dest
 extern void hashtable_extend(hashtable *dest, const hashtable *src);
 
+//  hashtable_inter : réalise l'intersection des clés des tables h1 et h2, puis les renvoie.
+//    Affecte à count le nombre de clés en communs (taille du tableau retourné)
+//    Renvoie NULL en cas de dépassement de capacité.
+extern const void **hashtable_inter(const hashtable *h1, hashtable *h2, int *count);
+
 #if defined HASHTABLE_STATS && HASHTABLE_STATS != 0
 
 #include <stdio.h>

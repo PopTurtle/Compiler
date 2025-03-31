@@ -270,6 +270,54 @@ void hashtable_extend(hashtable *dest, const hashtable *src) {
   }
 }
 
+const void **hashtable_inter(const hashtable *h1, hashtable *h2, int *count) {
+  if (h1 == NULL || h2 == NULL || count == NULL) {
+    return NULL;
+  }
+
+  // On initialise un tableau dynamique pour stocker les clés communes
+  size_t max_entries = 0;
+  size_t m1 = POW2(h1->lbnslots);
+
+  // Estimation du nombre maximum de clés communes
+  for (size_t i = 0; i < m1; ++i) {
+    cell *p = h1->hasharray[i];
+    while (p != NULL) {
+      ++max_entries;
+      p = p->next;
+    }
+  }
+
+  // Allocation de l'espace pour les clés communes
+  const void **common_keys = malloc(max_entries * sizeof(void *));
+  if (common_keys == NULL) {
+    return NULL;  // Si l'allocation échoue, on renvoie NULL
+  }
+
+  *count = 0;  // On initialise le compteur des clés communes à 0
+
+  // Parcourir les clés de la première table h1
+  for (size_t i = 0; i < m1; ++i) {
+    cell *p = h1->hasharray[i];
+    while (p != NULL) {
+      // Vérification si la clé existe aussi dans la deuxième table h2
+      if (hashtable_search(h2, p->keyref) != NULL) {
+        // Ajouter la clé commune au tableau
+        common_keys[*count] = p->keyref;
+        (*count)++;
+      }
+      p = p->next;
+    }
+  }
+
+  // Redimensionner le tableau des clés communes à la taille réelle
+  common_keys = realloc(common_keys, (size_t) *count * sizeof(void *));
+  if (common_keys == NULL && *count > 0) {
+    return NULL;  // Si la réallocation échoue, on renvoie NULL
+  }
+
+  return common_keys;  // Renvoie les clés communes
+}
 
 #if defined HASHTABLE_STATS && HASHTABLE_STATS != 0
 
