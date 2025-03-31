@@ -1,0 +1,19 @@
+\begin{algo}{EgyptianMultiplication}{i, j}
+    \SET{m}{0}
+    \SET{k}{1}
+    \DOWHILE{2 * k <= i}
+        \SET{k}{2 * k}
+        \SET{j}{2 * j}
+    \OD
+    \DOWHILE{k >= 1}
+        \IF{k <= i}
+            \SET{m}{m + j}
+            \SET{i}{i - k}
+        \FI
+        \SET{k}{k / 2}
+        \SET{j}{j / 2}
+    \OD
+    \RETURN{m}
+\end{algo}
+
+\CALL{EgyptianMultiplication}{47, 34}

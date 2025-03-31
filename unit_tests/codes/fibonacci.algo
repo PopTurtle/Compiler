@@ -1,0 +1,8 @@
+\begin{algo}{Fibonacci}{n}
+    \IF{n <= 1}
+        \RETURN{n}
+    \FI
+    \RETURN{\CALL{Fibonacci}{n - 1} + \CALL{Fibonacci}{n - 2}}
+\end{algo}
+
+\CALL{Fibonacci}{10}

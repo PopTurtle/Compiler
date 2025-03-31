@@ -1,0 +1,18 @@
+\begin{algo}{test}{value}
+    \IF{value == 0}
+        \SET{var}{false}
+    \ELSE
+        \SET{var}{true}
+    \FI
+    \IF{!!!var}
+        \RETURN{50}
+    \ELSE
+        \RETURN{20}
+    \FI
+\end{algo}
+
+\begin{algo}{main}{}
+    \RETURN{\CALL{test}{0} - \CALL{test}{1}}
+\end{algo}
+
+\CALL{main}{}

@@ -1,0 +1,13 @@
+\begin{algo}{decr_incr}{start, dc, ic}
+    \DOWHILE{dc > 0}
+        \DECR{start}
+        \DECR{dc}
+    \OD
+    \DOWHILE{ic > 0}
+        \INCR{start}
+        \DECR{ic}
+    \OD
+    \RETURN{start}
+\end{algo}
+
+\CALL{decr_incr}{1000, 254, 369}

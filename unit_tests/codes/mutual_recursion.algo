@@ -1,0 +1,25 @@
+\begin{algo}{Algo1}{a, b, c, d}
+    \SET{loc}{0}
+    \DOWHILE{a < b}
+        \SET{loc}{loc + \CALL{Algo2}{a}}
+        \SET{a}{a + c}
+    \OD
+    \RETURN{loc * d}
+\end{algo}
+
+\begin{algo}{Algo2}{param}
+    \IF{param <= 0}
+        \RETURN{1}
+    \FI
+    \RETURN{\CALL{Algo3}{param, param + 3}}
+\end{algo}
+
+\begin{algo}{Algo3}{s, e}
+    \SET{k}{0}
+    \DOFORI{count}{s}{e}
+        \SET{k}{k + \CALL{Algo2}{s - 1}}
+    \OD
+    \RETURN{k}
+\end{algo}
+
+\CALL{Algo1}{1, 6, 2, 5}

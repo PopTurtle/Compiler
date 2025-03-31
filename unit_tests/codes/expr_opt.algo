@@ -1,0 +1,11 @@
+\begin{algo}{expr_opt}{var}
+    \SET{condition}{true}
+    \IF{!!!!(condition) || !(18 <= 30) || !(50 > 15)}
+            \SET{offset}{(5 + 6 - 8 / 2) * 3}
+            \SET{offset}{offset * (offset / offset - 1)}
+            \RETURN{(var * 1 + 0) - var + offset}
+    \FI
+    \RETURN{-1}
+\end{algo}
+
+\CALL{expr_opt}{5}
