@@ -48,10 +48,11 @@
 // Gestion des erreurs
 #define ERRORTAG(tag_name, message)                                            \
     TAG("msg__" tag_name);                                                     \
-    printf("@string \"" message "\"\n");                                       \
+    printf("@string \"" message "\\n\"\n");                                    \
     TAG(tag_name);                                                             \
     CONSTSTR(R1, "msg__" tag_name);                                            \
-    printf("\tcallprintfs %s\n", R1);
+    printf("\tcallprintfs %s\n", R1);                                          \
+    printf("\tend\n");
 
 #define LOAD_ERROR_ADDR(reg, error_tag) CONSTSTR(reg, error_tag);
 

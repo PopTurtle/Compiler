@@ -30,8 +30,6 @@ typedef struct ast_node ast_node;
 #include "algorithms.h"
 
 extern void resolve_types(algorithms_map *algs);
-//extern void type_resolve(ast_node *node, const char *current_alg, algorithms_map *algs);
-//extern void instruct(ast_node *node);
 
 extern ast_node *make_int(int value);
 extern ast_node *make_bool(int bool_value);
@@ -49,6 +47,9 @@ extern ast_node *make_do_while(ast_node *condition, ast_node *body);
 
 extern ast_node *make_function(const char *function_name, ast_node *body);
 extern ast_node *make_sequence(ast_node *first, ast_node *second);
+
+extern int get_line(const ast_node *node);
+extern void set_line(ast_node *node, int line);
 
 extern void optimize_ast(algorithms_map *algs, ast_node *ast, int debug);
 extern void check_ast_code(ast_node *ast, algorithms_map *algs);

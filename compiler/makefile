@@ -22,7 +22,7 @@ objects = compiler.o hashtable.o ast.o value_type.o algorithms.o variables.o uti
 # --DYY_NO_INPUT: ne prend pas en compte la fonction input() inutile
 # -D_POSIX_SOURCE: declare la fonction fileno()
 LEXOPTS=-D_POSIX_SOURCE -DYY_NO_INPUT --nounput
-YACCOPTS=
+YACCOPTS=-Wcounterexamples
 
 executable = algosipro
 makefile_indicator = .\#makefile\#
@@ -32,7 +32,7 @@ makefile_indicator = .\#makefile\#
 all: $(executable)
 
 clean:
-	-rm lex.yy.* $(executable).tab.* *.err *.output *.out *.dot
+	$(RM) lex.yy.* $(executable).tab.* *.err *.output *.out *.dot
 	$(RM) $(objects) $(executable)
 	@$(RM) $(makefile_indicator)
 

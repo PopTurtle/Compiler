@@ -2,16 +2,21 @@
 	#include <stdio.h>
 	#include <stdlib.h>
 	#include <limits.h>
-    #include <string.h>
+  #include <string.h>
 	#include "algosipro.tab.h"
+
+
+  #define YYLLOC_DEFAULT(yylval, yylloc, lineno) yylloc.first_line = yylloc.last_line = lineno;
+  #define YY_USER_ACTION yylloc.first_line = yylloc.last_line = yylineno;
 
 	void string_to_int(int *r, const char *s);
 %}
 
+%option yylineno
 %option noyywrap
-entier	0|[1-9][0-9]*
+entier	0|-?[1-9][0-9]*
 boolean "true"|"false"
-symbol  [a-zA-Z_][a-zA-Z0-9_]{0,255}
+symbol  [a-zA-Z_][a-zA-Z0-9_]{0,254}
 
 %%
 
@@ -23,6 +28,9 @@ symbol  [a-zA-Z_][a-zA-Z0-9_]{0,255}
 
 "\\SET"                 { return INST_SET; }
 "\\RETURN"              { return INST_RETURN; }
+
+"\\INCR"                { return INST_INCR; }
+"\\DECR"                { return INST_DECR; }
 
 "\\IF"                  { return INST_IF; }
 "\\ELSE"                { return INST_ELSE; }

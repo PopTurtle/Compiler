@@ -34,80 +34,6 @@ int compile_code(int argc, char *argv[], algorithms_map *algs_map, ast_node *fir
         analyze_arg(argv[i]);
     }
 
-    // Parse
-    // -------------------------------------------------------------------------
-    //// Création des algos
-    //algorithms_map *algs_map = create_algorithms_map();
-    //algorithm *alg1 = create_algorithm(algs_map, "Algo1");
-    //variables_map *algv1 = get_alg_variables(alg1);
-    //algorithm *alg2 = create_algorithm(algs_map, "Algo2");
-    //variables_map *algv2 = get_alg_variables(alg2);
-//
-    //// VARS
-    //create_parameter(algv1, "n");
-    //create_local(algv1, "a");
-//
-    //// Arbre de l'algorithme Algo1
-    //ast_node *params1[] = { make_binary_operator(make_symbol("n"), OP_SUB, make_int(1)) };
-    //ast_node *node1 = 
-    //make_function(get_alg_name(alg1),
-    //    make_return(make_binary_operator(make_symbol("n"), OP_SUB, make_int(1)))
-    //);
-//
-    //// Arbre de l'algorithme Algo2
-    //ast_node *params2_3[] = { make_int(5) };
-    //ast_node *params2_2[] = { make_call("Algo1", params2_3, 1) };
-    //ast_node *params2_1[] = { make_call("Algo1", params2_2, 1) };
-//
-    //ast_node *node2 = 
-    //make_function(get_alg_name(alg2),
-    //    make_return(make_call("Algo1", params2_1, 1))
-    //);
-//
-    //// Association
-    //associate_tree(alg1, node1);
-    //associate_tree(alg2, node2);
-
-
-    // ALGO PUISSANCE REC
-//    algorithms_map *algs_map = create_algorithms_map();
-//    algorithm *alg1 = create_algorithm(algs_map, "Puissance");
-//    variables_map *algv1 = get_alg_variables(alg1);
-//    algorithm *alg2 = create_algorithm(algs_map, "Algo2");
-//    variables_map *algv2 = get_alg_variables(alg2);
-//    
-//    // VARS
-//    create_parameter(algv1, "a");
-//    create_parameter(algv1, "b");
-//    create_parameter(algv1, "acc");
-//
-//    // Arbre de l'algorithme Puissance
-//    ast_node *params1[] = { make_symbol("a"), make_binary_operator(make_symbol("b"), OP_SUB, make_int(1)), make_binary_operator(make_symbol("acc"), OP_MUL, make_symbol("a")) };
-//    ast_node *node1 = 
-//    make_function(get_alg_name(alg1),
-//        //make_sequence(
-//            make_if_statement(
-//                make_binary_operator(make_symbol("b"), OP_SGT, make_int(0)),
-//                make_return(make_call("Puissance", params1, 3)),
-//                make_return(make_symbol("acc"))
-//            )
-//        //)
-//    );
-//    
-//    // Arbre de l'algorithme Algo2
-//    ast_node *params2[] = { make_int(4), make_int(5), make_int(1) };
-//    
-//    ast_node *node2 = 
-//    make_function(get_alg_name(alg2),
-//        make_return(make_call("Puissance", params2, 3))
-//    );
-//    
-//    // Association
-//    associate_tree(alg1, node1);
-//    associate_tree(alg2, node2);
-//
-    // -------------------------------------------------------------------------
-    
     g_algs_map = algs_map;
 
     debug_print_part(algs_map, 1, "Type resolving");
@@ -123,7 +49,6 @@ int compile_code(int argc, char *argv[], algorithms_map *algs_map, ast_node *fir
 
     debug_print_part(algs_map, !g_no_code, "Output code");
     if (!g_no_code) {
-        ast_node *params[] = { make_int(3) };
         write_all_instructions(algs_map, first_call);
     }
 

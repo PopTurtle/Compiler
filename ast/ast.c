@@ -33,6 +33,7 @@ typedef enum {
 
 struct ast_node {
     ast_node_type type;
+    int line;
     union {
         int number_value;
         char *symbol_name;
@@ -61,21 +62,19 @@ static ast_node *make_spec_params_reassign(ast_node **params_expr, int pcount);
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
-static ast_node *canode() {
-    return (ast_node *) cralloc(sizeof(ast_node));
-}
-
-static void check_type(value_type current, value_type expected) {
-    if (current != expected) {
-        ERRORF("Type error : expected %s, got %s\n", value_type_to_string(expected), value_type_to_string(current));
-    }
+static ast_node *cranode() {
+    ast_node *node = (ast_node *) cralloc(sizeof(ast_node));
+    node->line = -1;
+    return node;
 }
 
 static int check_type_ignore(value_type current, value_type expected) {
     if (current == TYPE_UNKNOWN) {
         return 0;
     }
-    check_type(current, expected);
+    if (current != expected) {
+        return -1;
+    }
     return 1;
 }
 
@@ -163,8 +162,17 @@ static value_type get_expr_known_type(ast_node *node, variables_map *vars) {
         case NODE_CALL:
             return get_return_type(get_algorithm(g_algs, node->call.function_name));
         default:
-            ERROR("Trying to get the type of a node that has no type - ET1\n");
+            ERROR("Trying to get the type of a node that has no type\n");
     }
+}
+
+static int check_type_expr(ast_node *expr, variables_map *vars, value_type expected) {
+    value_type current = get_expr_known_type(expr, vars);
+    int res = check_type_ignore(current, expected);
+    if (res == -1) {
+        ERRORAF(expr, "Expression is of type %s but type %s is expected\n", value_type_to_string(current), value_type_to_string(expected));
+    }
+    return res;
 }
 
 static void resolve_types_in_alg([[ maybe_unused ]] const char *alg_name, algorithm *alg) {
@@ -174,7 +182,7 @@ static void resolve_types_in_alg([[ maybe_unused ]] const char *alg_name, algori
 #define CHECK_TYPE(expr, expected, msg_prefix)                                 \
     temp = get_expr_known_type(expr, vars);                                    \
     if (temp != TYPE_UNKNOWN && temp != expected) {                            \
-    ERRORF(msg_prefix " should have type %s but is of type %s\n", value_type_to_string(expected), value_type_to_string(temp)); \
+        ERRORAF(expr, msg_prefix " should have type %s but is of type %s\n", value_type_to_string(expected), value_type_to_string(temp));  \
     }                                                                          \
     unstable_if_unknown(temp);
 
@@ -202,26 +210,36 @@ static void resolve_types_in_ast(ast_node *ast, algorithm *current_alg, variable
             unstable_if_unknown(unify_return_type(current_alg, get_expr_known_type(ast->inst_return.expr, vars)));
             break;
         
+        case NODE_CALL:
+            for (int i = 0; i < ast->call.params_count; ++i) {
+                resolve_types_in_ast(ast->call.parameters_expr[i], current_alg, vars);
+                CHECK_TYPE(ast->call.parameters_expr[i], TYPE_INT, "Parameter of call")
+            }
+            break;
+
         case NODE_IF_STATEMENT:
             resolve_types_in_ast(ast->if_statement.condition, current_alg, vars);
             resolve_types_in_ast(ast->if_statement.then_block, current_alg, vars);
             resolve_types_in_ast(ast->if_statement.else_block, current_alg, vars);
-            CHECK_TYPE(ast->if_statement.condition, TYPE_BOOL, "Condition of 'if statement'");
+            CHECK_TYPE(ast->if_statement.condition, TYPE_BOOL, "Condition of if statement");
             break;
         
         case NODE_DO_FOR_I:
+            if (!variable_exists(vars, ast->do_for_i.var_name)) {
+                create_local(vars, ast->do_for_i.var_name);
+            }
             unify_variable_type(get_variable(get_alg_variables(current_alg), ast->do_for_i.var_name), TYPE_INT);
             resolve_types_in_ast(ast->do_for_i.start_expr, current_alg, vars);
             resolve_types_in_ast(ast->do_for_i.end_expr, current_alg, vars);
             resolve_types_in_ast(ast->do_for_i.body, current_alg, vars);
-            CHECK_TYPE(ast->do_for_i.start_expr, TYPE_INT, "First born expression of 'Do for statement'");
-            CHECK_TYPE(ast->do_for_i.end_expr, TYPE_INT, "Second born expression of 'Do for statement'");
+            CHECK_TYPE(ast->do_for_i.start_expr, TYPE_INT, "First born expression of Do for statement");
+            CHECK_TYPE(ast->do_for_i.end_expr, TYPE_INT, "Second born expression of Do for statement");
             break;
 
         case NODE_DO_WHILE:
             resolve_types_in_ast(ast->do_while.condition, current_alg, vars);
             resolve_types_in_ast(ast->do_while.body, current_alg, vars);
-            CHECK_TYPE(ast->do_while.condition, TYPE_BOOL, "Condition of 'while statement'");
+            CHECK_TYPE(ast->do_while.condition, TYPE_BOOL, "Condition of while statement");
             break;
 
         case NODE_FUNCTION:
@@ -242,7 +260,7 @@ static void resolve_types_in_unary_operation(ast_node *unary_op, algorithm *curr
     resolve_types_in_ast(unary_op->unary_operator.operand, current_alg, vars);
     switch (unary_op->unary_operator.operator) {
         case OP_NOT:
-            if (check_type_ignore(get_expr_known_type(unary_op->unary_operator.operand, vars), TYPE_BOOL)) {
+            if (check_type_expr(unary_op->unary_operator.operand, vars, TYPE_BOOL)) {
                 unary_op->unary_operator.result_type = TYPE_BOOL;
             }
             break;
@@ -273,8 +291,7 @@ static void resolve_types_in_binary_operation(ast_node *binary_op, algorithm *cu
             }
             break;
         case OP_EQUAL: // ne supporte pas bool == bool pour le moment
-            if (check_binary_operation_type(binary_op, vars, TYPE_INT, TYPE_INT)
-                || check_binary_operation_type(binary_op, vars, TYPE_BOOL, TYPE_BOOL)) {
+            if (check_binary_operation_type(binary_op, vars, TYPE_INT, TYPE_INT)) {
                 binary_op->binary_operator.result_type = TYPE_BOOL;
             }
             break;
@@ -294,8 +311,8 @@ static void resolve_types_in_binary_operation(ast_node *binary_op, algorithm *cu
 }
 
 static int check_binary_operation_type(ast_node *op, variables_map *vars, value_type expected_left, value_type expected_right) {
-    return check_type_ignore(get_expr_known_type(op->binary_operator.left, vars), expected_left)
-        && check_type_ignore(get_expr_known_type(op->binary_operator.right, vars), expected_right);
+    return check_type_expr(op->binary_operator.left, vars, expected_left)
+        && check_type_expr(op->binary_operator.right, vars, expected_right);
 }
 
 
@@ -331,7 +348,7 @@ static void write_call_function_code(ast_node *cn) {
     int pcount = params_count(get_alg_variables(alg));
     int lcount = locals_count(get_alg_variables(alg));
     if (pcount != cn->call.params_count) {
-        ERRORF("Function call %s expected %d parameters but got %d\n", get_alg_name(alg), pcount, cn->call.params_count);
+        ERRORAF(cn, "Function call %s expected %d parameters but got %d\n", get_alg_name(alg), pcount, cn->call.params_count);
     }
     CF("Preparing to call %s (%d params, %d locals)", get_alg_name(alg), pcount, lcount);
     // Valeur de retour
@@ -405,7 +422,7 @@ static void write_expression_code(ast_node *expr) {
             break;
         case NODE_SYMBOL:
             if (g_wcurrent == NULL) {
-                ERRORF("Tried to access symbol outside of any algorithm: '%s'\n", expr->symbol_name);
+                ERRORAF(expr, "Tried to access symbol outside of any algorithm: '%s'\n", expr->symbol_name);
             }
             push_symbol_code(expr->symbol_name);
             break;
@@ -717,16 +734,25 @@ static void cv_rm_depth(hashtable **hashtables, int current_depth) {
 }
 
 static const char *cv_if_node(ast_node *ast, hashtable **assigned, int depth) {
-    // si les deux chemins assigne VAR, alors VAR est assignée... à faire ------------------------------------------------------
-    return NULL;
+    const char *tmp = check_all_vars_assigned_aux(ast->if_statement.then_block, cv_add_depth(assigned, depth), depth + 1);
+    if (tmp != NULL) {
+        return tmp;
+    }
+    hashtable *h1 = hashtable_empty_cr();
+    hashtable_extend(h1, assigned[depth + 1]);
+    cv_rm_depth(assigned, depth);
+    tmp = check_all_vars_assigned_aux(ast->if_statement.else_block, cv_add_depth(assigned, depth), depth + 1);
+    if (tmp != NULL) {
+        return tmp;
+    }
 
-    // faux
-    //const char *tmp = check_all_vars_assigned_expr(ast->if_statement.condition, assigned[depth]);
-    //if (tmp != NULL) return tmp;
-    //tmp = check_all_vars_assigned_aux(ast->if_statement.then_block, cv_add_depth(assigned, depth), depth + 1);
-    //if (tmp == NULL) tmp = check_all_vars_assigned_aux(ast->if_statement.else_block, cv_add_depth(assigned, depth), depth + 1);
-    //cv_rm_depth(assigned, depth);
-    //return tmp;
+    int commons_count;
+    char **commons = (char **) hashtable_inter(h1, assigned[depth + 1], &commons_count);
+    for (int i = 0; i < commons_count; ++i) {
+        hashtable_add(assigned[depth], commons[i], commons[i]);
+    }
+
+    return NULL;
 }
 
 static const char *check_all_vars_assigned_aux(ast_node *ast, hashtable **assigned, int depth) {
@@ -799,12 +825,12 @@ static const char *check_all_vars_assigned(ast_node *ast, algorithms_map *algs) 
 void check_ast_code(ast_node *ast, algorithms_map *algs) {
     if (ast->type != NODE_FUNCTION) { ERROR("The AST to verfify is not a function\n"); }
     if (!check_all_path_returns(ast->function.body)) {
-        ERRORF("Some paths do not return any value in function '%s'\n", ast->function.function_name);
+        ERRORAF(ast, "Some paths do not return any value in function '%s'\n", ast->function.function_name);
     }
 
     const char *not_assigned_symbol = check_all_vars_assigned(ast, algs);
     if (not_assigned_symbol != NULL) {
-        ERRORF("Symbol '%s' might be used before being assigned in function '%s'\n", not_assigned_symbol, ast->function.function_name);
+        ERRORAF(ast, "Symbol '%s' might be used before being assigned in function '%s'\n", not_assigned_symbol, ast->function.function_name);
     }
 }
 
@@ -824,42 +850,198 @@ static int g_ochanged;
 
 #define OC() (g_ochanged++)
 
+#define RIGHT(expr) ((expr)->binary_operator.right)
+#define LEFT(expr) ((expr)->binary_operator.left)
+
 #define IS_INT_CONST(val) ((val)->type == NODE_CONST_INT)
 #define IS_BOOL_CONST(val) ((val)->type == NODE_CONST_BOOL)
+
+#define IS_ZERO(val) (IS_INT_CONST(val) && (val)->number_value == 0)
+#define IS_ONE(val) (IS_INT_CONST(val) && (val)->number_value == 1)
+#define IS_TRUE(val) (IS_BOOL_CONST(val) && (val)->number_value != 0)
+#define IS_FALSE(val) (IS_BOOL_CONST(val) && (val)->number_value == 0)
 
 #define TEST_LEFT_RIGHT(expr, test) (test((expr)->binary_operator.left) && test((expr)->binary_operator.right))
 
 #define MKVAL(expr, op, make_new) make_new((expr)->binary_operator.left->number_value op (expr)->binary_operator.right->number_value)
 
-#define CONCAT_2INT(expr, op) if (TEST_LEFT_RIGHT(expr, IS_INT_CONST)) { (expr) = MKVAL(expr, op, make_int); OC(); O_DEBUG("Precalc int const expression " #op); }
-#define CONCAT_2BOOL(expr, op) if (TEST_LEFT_RIGHT(expr, IS_BOOL_CONST)) { (expr) = MKVAL(expr, op, make_bool); OC(); O_DEBUG("Precalc bool const expression " #op); }
+#define CONCAT_2VAL(expr, op, is_const, mk_new, type_str) if (TEST_LEFT_RIGHT(expr, is_const)) { (expr) = MKVAL(expr, op, mk_new); OC(); O_DEBUG("Precalc " type_str " const expression " #op); break; }
 
-#define UNARY_MAKE_NEW(expr, condition, make_new, op) if (condition((expr)->unary_operator.operand)) (expr) = make_new(op (expr)->unary_operator.operand->number_value)
+#define CONCAT_2INT(expr, op) CONCAT_2VAL(expr, op, IS_INT_CONST, make_int, "int");
+#define CONCAT_2BOOL(expr, op) CONCAT_2VAL(expr, op, IS_BOOL_CONST, make_bool, "bool");
+#define CONCAT_2INT_RBOOL(expr, op) CONCAT_2VAL(expr, op, IS_INT_CONST, make_bool, "bool condition")
 
-static void optimize_expr(ast_node **expr) {
-    switch ((*expr)->type) {
+#define KEEP_LEFT(expr, condition) if (condition) { (expr) = (expr)->binary_operator.left; OC(); O_DEBUG("Keeping left side of operation"); break; }
+#define KEEP_RIGHT(expr, condition) if (condition) { (expr) = (expr)->binary_operator.right; OC(); O_DEBUG("Keeping right side of operation"); break; }
+
+#define IS_SYMBOL(val) ((val)->type == NODE_SYMBOL)
+#define ARE_SAME_SYMBOL(s1, s2) (IS_SYMBOL(s1) && IS_SYMBOL(s2) && strcmp((s1)->symbol_name, (s2)->symbol_name) == 0)
+
+static void optimize_expr(ast_node **expr_ptr) {
+    ast_node *expr = *expr_ptr;
+
+    switch ((*expr_ptr)->type) {
         case NODE_UNARY_OPERATOR:
-            optimize_expr(&((*expr)->unary_operator.operand));
-            switch ((*expr)->unary_operator.operator) {
-                case OP_NOT: UNARY_MAKE_NEW(*expr, IS_BOOL_CONST, make_bool, !); break;
+            optimize_expr(&((*expr_ptr)->unary_operator.operand));
+            
+            switch ((*expr_ptr)->unary_operator.operator) {
+                case OP_NOT:
+                    // !true => false ; !false => true
+                    if (IS_BOOL_CONST(expr->unary_operator.operand)) {
+                        *expr_ptr = make_bool(!expr->unary_operator.operand->number_value);
+                        OC(); O_DEBUG("Precalc bool expression");
+                        break;
+                    }
+
+                    // !!var => var
+                    if (expr->unary_operator.operand->type == NODE_UNARY_OPERATOR && expr->unary_operator.operand->unary_operator.operator == OP_NOT) {
+                        *expr_ptr = expr->unary_operator.operand->unary_operator.operand;
+                        OC(); O_DEBUG("Precalc bool expression");
+                    }
+                    break;
+
                 default: break;
             }
+             
             break;
+
+
         case NODE_BINARY_OPERATOR:
-            optimize_expr(&((*expr)->binary_operator.left));
-            optimize_expr(&((*expr)->binary_operator.right));
-            switch ((*expr)->binary_operator.operator) {
-                case OP_ADD: CONCAT_2INT(*expr, +); break;
-                case OP_SUB: CONCAT_2INT(*expr, -); break;
-                case OP_MUL: CONCAT_2INT(*expr, *); break;
-                case OP_DIV: CONCAT_2INT(*expr, /); break;
+            optimize_expr(&((*expr_ptr)->binary_operator.left));
+            optimize_expr(&((*expr_ptr)->binary_operator.right));
+            switch ((*expr_ptr)->binary_operator.operator) {
+                case OP_ADD:
+                    // const + const => const
+                    CONCAT_2INT(*expr_ptr, +);
 
-                case OP_AND: CONCAT_2BOOL(*expr, &&); break;
-                case OP_OR: CONCAT_2BOOL(*expr, ||); break;
+                    // expr + 0 => expr || 0 + expr => expr
+                    KEEP_LEFT(*expr_ptr, IS_ZERO(RIGHT(expr)));
+                    KEEP_RIGHT(*expr_ptr, IS_ZERO(LEFT(expr)));
+                    break;
+
+                case OP_SUB:
+                    // const - const => const
+                    CONCAT_2INT(*expr_ptr, -);
+
+                    // expr - 0 => expr
+                    KEEP_LEFT(*expr_ptr, IS_ZERO(RIGHT(expr)));
+
+                    // var - var => 0
+                    if (ARE_SAME_SYMBOL(LEFT(expr), RIGHT(expr))) {
+                        *expr_ptr = make_int(0);
+                        OC(); O_DEBUG("Precalc expr - expr => 0");
+                        break;
+                    }
+
+                    break;
+                
+                case OP_MUL:
+                    // const * const => const
+                    CONCAT_2INT(*expr_ptr, *);
+
+                    // expr * 1 => expr || 1 * expr => expr
+                    KEEP_LEFT(*expr_ptr, IS_ONE(RIGHT(expr)));
+                    KEEP_RIGHT(*expr_ptr, IS_ONE(LEFT(expr)));
+
+                    // expr * 0 => 0 || 0 * expr => 0
+                    if (IS_ZERO(LEFT(expr)) || IS_ZERO(RIGHT(expr))) {
+                        *expr_ptr = make_int(0);
+                        OC(); O_DEBUG("Precalc expr * 0 => 0");
+                        break;
+                    }
+
+                    break;
+
+                case OP_DIV:
+                    // const / const => const
+                    CONCAT_2INT(*expr_ptr, /);
+
+                    // expr / 1 => expr
+                    KEEP_LEFT(*expr_ptr, IS_ONE(RIGHT(expr)))
+
+                    // expr / 0 => ERROR
+                    if (IS_ZERO(RIGHT(expr))) {
+                        ERRORA(expr, "Division by zero");
+                    }
+
+                    // var / var => 1
+                    if (ARE_SAME_SYMBOL(LEFT(expr), RIGHT(expr))) {
+                        *expr_ptr = make_int(1);
+                        OC(); O_DEBUG("Precalc expr / expr => 1");
+                        break;
+                    }
+
+                    break;
+
+                case OP_AND:
+                    // const && const => const
+                    CONCAT_2BOOL(*expr_ptr, &&);
+
+                    // expr && true => expr || true && expr => expr
+                    KEEP_LEFT(*expr_ptr, IS_TRUE(RIGHT(expr)))
+                    KEEP_RIGHT(*expr_ptr, IS_TRUE(LEFT(expr)))
+
+                    // expr && false => false || false && expr => false
+                    if (IS_FALSE(LEFT(expr)) || IS_FALSE(RIGHT(expr))) {
+                        *expr_ptr = make_bool(0);
+                        OC(); O_DEBUG("Precalc expr && false => false");
+                        break;
+                    }
+
+                    break;
+
+                case OP_OR:
+                    // const || const => const
+                    CONCAT_2BOOL(*expr_ptr, ||);
+
+                    // expr || false => expr || false || expr => expr
+                    KEEP_LEFT(*expr_ptr, IS_FALSE(RIGHT(expr)))
+                    KEEP_RIGHT(*expr_ptr, IS_FALSE(LEFT(expr)))
+
+                    // expr || true => true || true || expr => true
+                    if (IS_TRUE(LEFT(expr)) || IS_TRUE(RIGHT(expr))) {
+                        *expr_ptr = make_bool(1);
+                        OC(); O_DEBUG("Precalc expr || true => true");
+                        break;
+                    }
+
+                    break;
+
+                case OP_EQUAL:
+                    // int const == int const => bool const
+                    CONCAT_2INT_RBOOL(*expr_ptr, ==);
+
+                    break;
+                
+                case OP_SGT:
+                    // int const > int const => bool const
+                    CONCAT_2INT_RBOOL(*expr_ptr, >);
+
+                    break;
+
+                case OP_EGT:
+                    // int const >= int const => bool const
+                    CONCAT_2INT_RBOOL(*expr_ptr, >=);
+
+                    break;
+
+                case OP_SLT:
+                    // int const < int const => bool const
+                    CONCAT_2INT_RBOOL(*expr_ptr, <);
+
+                    break;
+
+                case OP_ELT:
+                    // int const <= int const => bool const
+                    CONCAT_2INT_RBOOL(*expr_ptr, <=);
+
+                    break;
+
 
                 default: break;
             }
             break;
+
         default:
             break;
     }
@@ -893,30 +1075,6 @@ static void optimize_const_expr(ast_node *ast) {
             break;
     }
 }
-
-//#define IS_CONST(ast) (ast->type == NODE_CONST_INT || ast->type == NODE_CONST_BOOL)
-//
-//static void optimize_var_usage(ast_node *ast, hashtable* constants[], int depth) {
-//    switch (ast->type) {
-//        case NODE_FUNCTION:
-//            optimize_var_usage(ast->function.body, constants, depth);
-//            break;
-//        case NODE_ASSIGNEMENT:
-//            if (IS_CONST(ast->assignement.expr)) {
-//                hashtable_add(constants[depth], ast->assignement.var_name, ast->assignement.expr);
-//            }
-//            break;
-//        
-//        default:
-//            break;
-//    }
-//}
-//
-//static void optimize_var_usage_pre(ast_node *ast) {
-//    hashtable *constant_storages[] = cralloc(256 * sizeof *constant_storages);
-//    optimize_var_usage(ast, constant_storages, 0);
-//    free(constant_storages);
-//}
 
 static void optimize_dead_blocks(ast_node **ast_ptr) {
     ast_node *ast = *ast_ptr;
@@ -1164,13 +1322,9 @@ void optimize_ast(algorithms_map *algs, ast_node *ast, int debug) {
     do {
         g_ochanged = 0;
 
-        // a refaire car ne precalc pas 6 + d + 2 ou encore false && c ---------------------------------------------------------
         optimize_const_expr(ast);
         
         optimize_dead_blocks(&ast);
-
-        // var usage (const var)
-        // remove dead assignement (& dead vars ?)
 
         algorithm *alg = get_algorithm(algs, ast->function.function_name);
         optimize_tail_call_recursion(alg, ast);
@@ -1189,28 +1343,28 @@ void optimize_ast(algorithms_map *algs, ast_node *ast, int debug) {
 //  ------------------------------------------------------------------------  //
 //  ------------------------------------------------------------------------  //
 ast_node *make_int(int value) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_CONST_INT;
     node->number_value = value;
     return node;
 }
 
 ast_node *make_bool(int bool_value) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_CONST_BOOL;
     node->number_value = bool_value == 0 ? 0 : 1;
     return node;
 }
 
 ast_node *make_symbol(const char *symbol) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_SYMBOL;
     node->symbol_name = mstrcpy(symbol);
     return node;
 }
 
 ast_node *make_unary_operator(unary_operator_t operator, ast_node *operand) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_UNARY_OPERATOR;
     node->unary_operator.operand = operand;
     node->unary_operator.operator = operator;
@@ -1219,7 +1373,7 @@ ast_node *make_unary_operator(unary_operator_t operator, ast_node *operand) {
 }
 
 ast_node *make_binary_operator(ast_node *left, binary_operator_t operator, ast_node *right) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_BINARY_OPERATOR;
     node->binary_operator.left = left;
     node->binary_operator.operator = operator;
@@ -1229,7 +1383,7 @@ ast_node *make_binary_operator(ast_node *left, binary_operator_t operator, ast_n
 }
 
 ast_node *make_assignement(const char *var_name, ast_node *expr) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_ASSIGNEMENT;
     node->assignement.var_name = mstrcpy(var_name);
     node->assignement.expr = expr;
@@ -1237,14 +1391,14 @@ ast_node *make_assignement(const char *var_name, ast_node *expr) {
 }
 
 ast_node *make_return(ast_node *expr) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_RETURN;
     node->inst_return.expr = expr;
     return node;
 }
 
 ast_node *make_call(const char *function_name, ast_node **parameters, int params_count) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_CALL;
     node->call.function_name = mstrcpy(function_name);
     node->call.parameters_expr = parameters;
@@ -1253,7 +1407,7 @@ ast_node *make_call(const char *function_name, ast_node **parameters, int params
 }
 
 ast_node *make_if_statement(ast_node *condition, ast_node *then_block, ast_node *else_block) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_IF_STATEMENT;
     node->if_statement.condition = condition;
     node->if_statement.then_block = then_block;
@@ -1262,7 +1416,7 @@ ast_node *make_if_statement(ast_node *condition, ast_node *then_block, ast_node 
 }
 
 ast_node *make_do_for_i(const char *var_name, ast_node *start_expr, ast_node *end_expr, ast_node *body) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_DO_FOR_I;
     node->do_for_i.var_name = mstrcpy(var_name);
     node->do_for_i.start_expr = start_expr;
@@ -1272,7 +1426,7 @@ ast_node *make_do_for_i(const char *var_name, ast_node *start_expr, ast_node *en
 }
 
 ast_node *make_do_while(ast_node *condition, ast_node *body) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_DO_WHILE;
     node->do_while.condition = condition;
     node->do_while.body = body;
@@ -1280,7 +1434,7 @@ ast_node *make_do_while(ast_node *condition, ast_node *body) {
 }
 
 ast_node *make_function(const char *function_name, ast_node *body) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_FUNCTION;
     node->function.function_name = mstrcpy(function_name);
     node->function.body = body;
@@ -1288,7 +1442,7 @@ ast_node *make_function(const char *function_name, ast_node *body) {
 }
 
 ast_node *make_sequence(ast_node *first, ast_node *second) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_SEQUENCE;
     node->sequence.first = first;
     node->sequence.second = second;
@@ -1296,11 +1450,19 @@ ast_node *make_sequence(ast_node *first, ast_node *second) {
 }
 
 ast_node *make_spec_params_reassign(ast_node **params_expr, int pcount) {
-    ast_node *node = canode();
+    ast_node *node = cranode();
     node->type = NODE_SPEC_PARAMS_REASSIGN;
     node->spec_params_reassign.parameters_expr = params_expr;
     node->spec_params_reassign.params_count = pcount;
     return node;
+}
+
+extern int get_line(const ast_node *node) {
+    return node->line;
+}
+
+extern void set_line(ast_node *node, int line) {
+    node->line = line;
 }
 
 
